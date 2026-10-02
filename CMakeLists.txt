@@ -1,3 +1,17 @@
+# ============================================================================
+# body-worn-camera 构建脚本 —— 库分层与依赖关系
+# ----------------------------------------------------------------------------
+# 目标结构（自底向上，上层依赖下层）：
+#   platform     平台抽象层：V4L2 采集 + ALSA 采集 + 单调时钟
+#                （板端移植：新增 rkmpi 源文件，替换工厂函数即可）
+#   avcodec_wrap 编码/封装层：x264/AAC 软编 + fragmented MP4 分段封装
+#                （依赖 platform：仅用其 common 类型与 libav 库）
+#   middleware   核心中间件（平台无关，移植时零改动）：
+#                预录环形缓冲 / 分段管理 / 录制状态机 / OSD / 可信时间 /
+#                哈希链完整性 / 检索索引
+#   bwc_demo     演示主程序；aac_test / sync_test 独立单测（无硬件依赖）
+# 第三方依赖：FFmpeg(libavcodec/format/util/swscale/filter)、ALSA、OpenSSL
+# ============================================================================
 cmake_minimum_required(VERSION 3.16)
 project(body-worn-camera CXX C)
 

@@ -1,3 +1,14 @@
+// ============================================================================
+// 音频采集实现（PC 版）：ALSA PCM s16le 交织格式，20ms/包。
+// ----------------------------------------------------------------------------
+// 【参数设计】16kHz 单声道 s16le —— 与视频帧间隔对齐的 20ms period
+//   （16000/50=320 样本/包），使音频包粒度与视频帧粒度同量级，
+//   便于逐帧做音画同步判断与 PTS 推进（音频样本计数=主时钟）。
+// 【健壮性】snd_pcm_readi 返回负值=overrun/underrun，用 snd_pcm_recover
+//   自动恢复；打开失败（WSL 无声卡是常态）由上层 Recorder 降级为纯视频。
+// 【RV1126 移植】替换为 audio_rkmpi.cpp：RKMPI AI 通道 + G.711A 编码
+//   （64kbps，无需 AAC 软编），接口本文件化后中间件零改动。
+// ============================================================================
 // 音频采集：ALSA PCM s16le。RV1126 移植时替换为 RKMPI AI 通道 / G.711A 采集。
 #include "platform/audio_source.hpp"
 #include <alsa/asoundlib.h>
@@ -11,6 +22,7 @@ public:
 
     bool open(const std::string& dev, uint32_t rate, int channels) override {
         snd_pcm_t* pcm = nullptr;
+        // 阻塞模式打开（捕获流）；dev 形如 "default"/"hw:0,0"
         if (snd_pcm_open(&pcm, dev.c_str(), SND_PCM_STREAM_CAPTURE, 0) < 0) return false;
         pcm_ = pcm;
         rate_ = rate;
@@ -44,6 +56,7 @@ public:
     bool read(AudioFrame& out) override {
         if (!pcm_) return false;
         out.data.resize((size_t)period_frames_ * channels_ * sizeof(int16_t));
+        // 阻塞读取一个 period（20ms）；返回负值 = overrun/underrun 等流错误
         snd_pcm_sframes_t n = snd_pcm_readi(pcm_, out.data.data(), period_frames_);
         if (n < 0) {                       // underrun/overrun 恢复
             if (snd_pcm_recover(pcm_, (int)n, 1) < 0) return false;

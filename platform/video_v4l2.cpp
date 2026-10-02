@@ -1,5 +1,17 @@
-// V4L2 采集实现：YUYV -> NV12 转换，输出统一 VideoFrame（原始帧）
-// 移植到 RV1126 时，用 create_rkmpi_source() 替换本文件即可，接口不变。
+// ============================================================================
+// V4L2 视频采集实现（PC/WSL 版）—— IVideoSource 接口的 Linux 通用层落地。
+// ----------------------------------------------------------------------------
+// 【数据通路】/dev/video0 (UVC) → ioctl 协商格式 → 4 个 mmap 缓冲排队出流
+//   → DQBUF 取帧 → (YUYV 软转 NV12 | MJPG 软解 NV12) → 统一 VideoFrame。
+// 【实测教训：为什么默认 MJPG】
+//   usbipd(vhci) 虚拟 USB 通道无法为 YUYV 的等时传输维持 ~15MB/s 带宽预留，
+//   所有 URB 被 -ECONNRESET(-104) 取消——设备能枚举、能亮灯，但永远不出帧。
+//   MJPG 是压缩格式带宽低 1~2 个量级，可通过 USB/IP 正常传输，
+//   接收端用 libavcodec 软解回 NV12，对上层透明。
+// 【RV1126 移植】本文件整体替换为 video_rkmpi.cpp（RKMPI VI 通道）：
+//   VI 直接出 NV12（ISP 硬件完成），无需本文件的软件颜色转换；
+//   mmap 缓冲队列对应 VB 池，DQBUF/QBUF 对应 Get/ReleaseMediaBuffer。
+// ============================================================================
 #include "platform/video_source.hpp"
 #include <fcntl.h>
 #include <unistd.h>
@@ -16,13 +28,18 @@ extern "C" {
 
 namespace {
 
+// ioctl 重试封装：V4L2 调用可能被信号打断（EINTR），需自动重试
 int xioctl(int fd, unsigned long req, void* arg) {
     int r;
     do { r = ioctl(fd, req, arg); } while (r < 0 && errno == EINTR);
     return r;
 }
 
-// YUYV422 打包 -> NV12 (YUV420SP)。性能足够 demo；板端 VI 直接出 NV12 无需此步。
+// YUYV422 打包格式 → NV12 (YUV420SP) 软件颜色转换。
+// 内存布局：YUYV = [Y0 U Y1 V] 交织（每像素 2 字节，水平 4:2:2）；
+//           NV12  = Y 平面整幅 + UV 交错平面（水平垂直均 4:2:0）。
+// 转换规则：每行取 Y0/Y1 直接拷贝；UV 仅在偶数行取（丢弃奇数行色度=垂直降采样）。
+// 性能说明：640x480@30 单核占用可控，demo 足够；板端 VI 硬件直接出 NV12 无此开销。
 void yuyv_to_nv12(const uint8_t* src, uint8_t* dst, int w, int h) {
     uint8_t* y = dst;
     uint8_t* uv = dst + (size_t)w * h;
@@ -30,11 +47,11 @@ void yuyv_to_nv12(const uint8_t* src, uint8_t* dst, int w, int h) {
         const uint8_t* s = src + (size_t)row * w * 2;
         bool odd = (row & 1);
         for (int col = 0; col < w; col += 2) {
-            y[col]     = s[col * 2];
-            y[col + 1] = s[col * 2 + 2];
-            if (!odd) {
-                uv[col]     = s[col * 2 + 1];
-                uv[col + 1] = s[col * 2 + 3];
+            y[col]     = s[col * 2];       // Y0
+            y[col + 1] = s[col * 2 + 2];   // Y1
+            if (!odd) {                    // 色度只在偶数行写入（4:2:0 垂直降采样）
+                uv[col]     = s[col * 2 + 1];  // U
+                uv[col + 1] = s[col * 2 + 3];  // V
             }
         }
         y += w;
