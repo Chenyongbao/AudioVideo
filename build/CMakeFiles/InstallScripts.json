@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/mrchen/body-worn-camera/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

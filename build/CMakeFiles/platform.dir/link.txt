@@ -1,0 +1,2 @@
+/usr/bin/ar qc libplatform.a CMakeFiles/platform.dir/platform/video_v4l2.cpp.o CMakeFiles/platform.dir/platform/audio_alsa.cpp.o CMakeFiles/platform.dir/platform/clock.cpp.o
+/usr/bin/ranlib libplatform.a
