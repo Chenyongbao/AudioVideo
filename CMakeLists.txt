@@ -9,7 +9,7 @@ endif()
 add_compile_options(-Wall -Wextra)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(AV REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libswscale)
+pkg_check_modules(AV REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libswscale libavfilter libswscale)
 # ALSA 仅 Linux 平台需要
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
@@ -43,6 +43,9 @@ add_library(middleware STATIC
   middleware/ring_buffer.cpp
   middleware/recorder.cpp
   middleware/integrity.cpp
+  middleware/osd.cpp
+  middleware/trusted_time.cpp
+  middleware/indexer.cpp
 )
 target_link_libraries(middleware PUBLIC avcodec_wrap platform)
 
@@ -57,3 +60,7 @@ target_link_libraries(bwc_demo PRIVATE middleware pthread)
 # AAC 双流封装单测（不依赖摄像头/声卡）
 add_executable(aac_test apps/aac_test.cpp)
 target_link_libraries(aac_test PRIVATE middleware OpenSSL::Crypto pthread)
+
+# 音视频同步验证（合成事件法，不依赖摄像头/声卡）
+add_executable(sync_test apps/sync_test.cpp)
+target_link_libraries(sync_test PRIVATE middleware OpenSSL::Crypto pthread)

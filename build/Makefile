@@ -181,6 +181,19 @@ aac_test/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/aac_test.dir/build.make CMakeFiles/aac_test.dir/build
 .PHONY : aac_test/fast
 
+#=============================================================================
+# Target rules for targets named sync_test
+
+# Build rule for target.
+sync_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 sync_test
+.PHONY : sync_test
+
+# fast build rule for target.
+sync_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sync_test.dir/build.make CMakeFiles/sync_test.dir/build
+.PHONY : sync_test/fast
+
 apps/aac_test.o: apps/aac_test.cpp.o
 .PHONY : apps/aac_test.o
 
@@ -204,6 +217,30 @@ apps/aac_test.s: apps/aac_test.cpp.s
 apps/aac_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/aac_test.dir/build.make CMakeFiles/aac_test.dir/apps/aac_test.cpp.s
 .PHONY : apps/aac_test.cpp.s
+
+apps/sync_test.o: apps/sync_test.cpp.o
+.PHONY : apps/sync_test.o
+
+# target to build an object file
+apps/sync_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sync_test.dir/build.make CMakeFiles/sync_test.dir/apps/sync_test.cpp.o
+.PHONY : apps/sync_test.cpp.o
+
+apps/sync_test.i: apps/sync_test.cpp.i
+.PHONY : apps/sync_test.i
+
+# target to preprocess a source file
+apps/sync_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sync_test.dir/build.make CMakeFiles/sync_test.dir/apps/sync_test.cpp.i
+.PHONY : apps/sync_test.cpp.i
+
+apps/sync_test.s: apps/sync_test.cpp.s
+.PHONY : apps/sync_test.s
+
+# target to generate assembly for a file
+apps/sync_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sync_test.dir/build.make CMakeFiles/sync_test.dir/apps/sync_test.cpp.s
+.PHONY : apps/sync_test.cpp.s
 
 encoder/aac_encoder.o: encoder/aac_encoder.cpp.o
 .PHONY : encoder/aac_encoder.o
@@ -277,6 +314,30 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bwc_demo.dir/build.make CMakeFiles/bwc_demo.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+middleware/indexer.o: middleware/indexer.cpp.o
+.PHONY : middleware/indexer.o
+
+# target to build an object file
+middleware/indexer.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/indexer.cpp.o
+.PHONY : middleware/indexer.cpp.o
+
+middleware/indexer.i: middleware/indexer.cpp.i
+.PHONY : middleware/indexer.i
+
+# target to preprocess a source file
+middleware/indexer.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/indexer.cpp.i
+.PHONY : middleware/indexer.cpp.i
+
+middleware/indexer.s: middleware/indexer.cpp.s
+.PHONY : middleware/indexer.s
+
+# target to generate assembly for a file
+middleware/indexer.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/indexer.cpp.s
+.PHONY : middleware/indexer.cpp.s
+
 middleware/integrity.o: middleware/integrity.cpp.o
 .PHONY : middleware/integrity.o
 
@@ -300,6 +361,30 @@ middleware/integrity.s: middleware/integrity.cpp.s
 middleware/integrity.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/integrity.cpp.s
 .PHONY : middleware/integrity.cpp.s
+
+middleware/osd.o: middleware/osd.cpp.o
+.PHONY : middleware/osd.o
+
+# target to build an object file
+middleware/osd.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/osd.cpp.o
+.PHONY : middleware/osd.cpp.o
+
+middleware/osd.i: middleware/osd.cpp.i
+.PHONY : middleware/osd.i
+
+# target to preprocess a source file
+middleware/osd.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/osd.cpp.i
+.PHONY : middleware/osd.cpp.i
+
+middleware/osd.s: middleware/osd.cpp.s
+.PHONY : middleware/osd.s
+
+# target to generate assembly for a file
+middleware/osd.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/osd.cpp.s
+.PHONY : middleware/osd.cpp.s
 
 middleware/recorder.o: middleware/recorder.cpp.o
 .PHONY : middleware/recorder.o
@@ -348,6 +433,30 @@ middleware/ring_buffer.s: middleware/ring_buffer.cpp.s
 middleware/ring_buffer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/ring_buffer.cpp.s
 .PHONY : middleware/ring_buffer.cpp.s
+
+middleware/trusted_time.o: middleware/trusted_time.cpp.o
+.PHONY : middleware/trusted_time.o
+
+# target to build an object file
+middleware/trusted_time.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o
+.PHONY : middleware/trusted_time.cpp.o
+
+middleware/trusted_time.i: middleware/trusted_time.cpp.i
+.PHONY : middleware/trusted_time.i
+
+# target to preprocess a source file
+middleware/trusted_time.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/trusted_time.cpp.i
+.PHONY : middleware/trusted_time.cpp.i
+
+middleware/trusted_time.s: middleware/trusted_time.cpp.s
+.PHONY : middleware/trusted_time.s
+
+# target to generate assembly for a file
+middleware/trusted_time.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/middleware.dir/build.make CMakeFiles/middleware.dir/middleware/trusted_time.cpp.s
+.PHONY : middleware/trusted_time.cpp.s
 
 muxer/fmp4_segment_writer.o: muxer/fmp4_segment_writer.cpp.o
 .PHONY : muxer/fmp4_segment_writer.o
@@ -458,9 +567,13 @@ help:
 	@echo "... bwc_demo"
 	@echo "... middleware"
 	@echo "... platform"
+	@echo "... sync_test"
 	@echo "... apps/aac_test.o"
 	@echo "... apps/aac_test.i"
 	@echo "... apps/aac_test.s"
+	@echo "... apps/sync_test.o"
+	@echo "... apps/sync_test.i"
+	@echo "... apps/sync_test.s"
 	@echo "... encoder/aac_encoder.o"
 	@echo "... encoder/aac_encoder.i"
 	@echo "... encoder/aac_encoder.s"
@@ -470,15 +583,24 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... middleware/indexer.o"
+	@echo "... middleware/indexer.i"
+	@echo "... middleware/indexer.s"
 	@echo "... middleware/integrity.o"
 	@echo "... middleware/integrity.i"
 	@echo "... middleware/integrity.s"
+	@echo "... middleware/osd.o"
+	@echo "... middleware/osd.i"
+	@echo "... middleware/osd.s"
 	@echo "... middleware/recorder.o"
 	@echo "... middleware/recorder.i"
 	@echo "... middleware/recorder.s"
 	@echo "... middleware/ring_buffer.o"
 	@echo "... middleware/ring_buffer.i"
 	@echo "... middleware/ring_buffer.s"
+	@echo "... middleware/trusted_time.o"
+	@echo "... middleware/trusted_time.i"
+	@echo "... middleware/trusted_time.s"
 	@echo "... muxer/fmp4_segment_writer.o"
 	@echo "... muxer/fmp4_segment_writer.i"
 	@echo "... muxer/fmp4_segment_writer.s"

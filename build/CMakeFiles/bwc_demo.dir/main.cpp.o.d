@@ -255,6 +255,14 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: \
  /usr/include/c++/11/bits/stl_deque.h /usr/include/c++/11/bits/deque.tcc \
  /home/mrchen/body-worn-camera/encoder/h264_encoder.hpp \
  /home/mrchen/body-worn-camera/encoder/aac_encoder.hpp \
+ /home/mrchen/body-worn-camera/middleware/osd.hpp \
+ /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/version.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersrc.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersink.h \
+ /usr/include/x86_64-linux-gnu/libswscale/swscale.h \
+ /usr/include/x86_64-linux-gnu/libswscale/version.h \
  /home/mrchen/body-worn-camera/platform/video_source.hpp \
  /home/mrchen/body-worn-camera/platform/audio_source.hpp \
  /usr/include/c++/11/atomic /usr/include/c++/11/thread \

@@ -114,11 +114,56 @@ CMakeFiles/middleware.dir/middleware/integrity.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/middleware.dir/middleware/integrity.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/mrchen/body-worn-camera/middleware/integrity.cpp -o CMakeFiles/middleware.dir/middleware/integrity.cpp.s
 
+CMakeFiles/middleware.dir/middleware/osd.cpp.o: CMakeFiles/middleware.dir/flags.make
+CMakeFiles/middleware.dir/middleware/osd.cpp.o: /home/mrchen/body-worn-camera/middleware/osd.cpp
+CMakeFiles/middleware.dir/middleware/osd.cpp.o: CMakeFiles/middleware.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/mrchen/body-worn-camera/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/middleware.dir/middleware/osd.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/middleware.dir/middleware/osd.cpp.o -MF CMakeFiles/middleware.dir/middleware/osd.cpp.o.d -o CMakeFiles/middleware.dir/middleware/osd.cpp.o -c /home/mrchen/body-worn-camera/middleware/osd.cpp
+
+CMakeFiles/middleware.dir/middleware/osd.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/middleware.dir/middleware/osd.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/mrchen/body-worn-camera/middleware/osd.cpp > CMakeFiles/middleware.dir/middleware/osd.cpp.i
+
+CMakeFiles/middleware.dir/middleware/osd.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/middleware.dir/middleware/osd.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/mrchen/body-worn-camera/middleware/osd.cpp -o CMakeFiles/middleware.dir/middleware/osd.cpp.s
+
+CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o: CMakeFiles/middleware.dir/flags.make
+CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o: /home/mrchen/body-worn-camera/middleware/trusted_time.cpp
+CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o: CMakeFiles/middleware.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/mrchen/body-worn-camera/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o -MF CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o.d -o CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o -c /home/mrchen/body-worn-camera/middleware/trusted_time.cpp
+
+CMakeFiles/middleware.dir/middleware/trusted_time.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/middleware.dir/middleware/trusted_time.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/mrchen/body-worn-camera/middleware/trusted_time.cpp > CMakeFiles/middleware.dir/middleware/trusted_time.cpp.i
+
+CMakeFiles/middleware.dir/middleware/trusted_time.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/middleware.dir/middleware/trusted_time.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/mrchen/body-worn-camera/middleware/trusted_time.cpp -o CMakeFiles/middleware.dir/middleware/trusted_time.cpp.s
+
+CMakeFiles/middleware.dir/middleware/indexer.cpp.o: CMakeFiles/middleware.dir/flags.make
+CMakeFiles/middleware.dir/middleware/indexer.cpp.o: /home/mrchen/body-worn-camera/middleware/indexer.cpp
+CMakeFiles/middleware.dir/middleware/indexer.cpp.o: CMakeFiles/middleware.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/mrchen/body-worn-camera/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/middleware.dir/middleware/indexer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/middleware.dir/middleware/indexer.cpp.o -MF CMakeFiles/middleware.dir/middleware/indexer.cpp.o.d -o CMakeFiles/middleware.dir/middleware/indexer.cpp.o -c /home/mrchen/body-worn-camera/middleware/indexer.cpp
+
+CMakeFiles/middleware.dir/middleware/indexer.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/middleware.dir/middleware/indexer.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/mrchen/body-worn-camera/middleware/indexer.cpp > CMakeFiles/middleware.dir/middleware/indexer.cpp.i
+
+CMakeFiles/middleware.dir/middleware/indexer.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/middleware.dir/middleware/indexer.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/mrchen/body-worn-camera/middleware/indexer.cpp -o CMakeFiles/middleware.dir/middleware/indexer.cpp.s
+
 # Object files for target middleware
 middleware_OBJECTS = \
 "CMakeFiles/middleware.dir/middleware/ring_buffer.cpp.o" \
 "CMakeFiles/middleware.dir/middleware/recorder.cpp.o" \
-"CMakeFiles/middleware.dir/middleware/integrity.cpp.o"
+"CMakeFiles/middleware.dir/middleware/integrity.cpp.o" \
+"CMakeFiles/middleware.dir/middleware/osd.cpp.o" \
+"CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o" \
+"CMakeFiles/middleware.dir/middleware/indexer.cpp.o"
 
 # External object files for target middleware
 middleware_EXTERNAL_OBJECTS =
@@ -126,9 +171,12 @@ middleware_EXTERNAL_OBJECTS =
 libmiddleware.a: CMakeFiles/middleware.dir/middleware/ring_buffer.cpp.o
 libmiddleware.a: CMakeFiles/middleware.dir/middleware/recorder.cpp.o
 libmiddleware.a: CMakeFiles/middleware.dir/middleware/integrity.cpp.o
+libmiddleware.a: CMakeFiles/middleware.dir/middleware/osd.cpp.o
+libmiddleware.a: CMakeFiles/middleware.dir/middleware/trusted_time.cpp.o
+libmiddleware.a: CMakeFiles/middleware.dir/middleware/indexer.cpp.o
 libmiddleware.a: CMakeFiles/middleware.dir/build.make
 libmiddleware.a: CMakeFiles/middleware.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/mrchen/body-worn-camera/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking CXX static library libmiddleware.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/mrchen/body-worn-camera/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX static library libmiddleware.a"
 	$(CMAKE_COMMAND) -P CMakeFiles/middleware.dir/cmake_clean_target.cmake
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/middleware.dir/link.txt --verbose=$(VERBOSE)
 

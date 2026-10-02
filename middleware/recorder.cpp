@@ -3,6 +3,7 @@
 // 板端移植时改为"触发才落盘 + 回填预录"（见 triggerRecord 注释）。
 #include "middleware/recorder.hpp"
 #include "middleware/integrity.hpp"
+#include "middleware/trusted_time.hpp"
 #include <sys/stat.h>
 #include <thread>
 
@@ -20,6 +21,13 @@ bool Recorder::start(const Recorder::Config& c) {
     cfg_ = c;
     mkdirs(cfg_.output_dir);
 
+    // 0) 可信时间对时（6.4.17）：失败不阻塞录制（降级为不可信墙钟，OSD 带标记）
+    {
+        auto& tc = TrustedClock::instance();
+        tc.configure(TrustedClock::Config{});
+        tc.sync();
+    }
+
     // 1) 打开视频源（PC: V4L2；板端换 create_rkmpi_source）
     video_ = create_v4l2_source();
     if (!video_->open("/dev/video0", cfg_.width, cfg_.height, cfg_.fps)) return false;
@@ -29,6 +37,9 @@ bool Recorder::start(const Recorder::Config& c) {
     // 2) 编码器（板端换 MPP VENC）
     encoder_ = create_x264_encoder();
     if (!encoder_->open(cfg_.width, cfg_.height, cfg_.fps, cfg_.bitrate_kbps)) return false;
+
+    // 2.5) OSD 初始化（编码前烧帧：时间戳+设备编号；板端换 RGA 通道）
+    osd_enabled_ = osd_.init(cfg_.width, cfg_.height, cfg_.fps, "RV1126-DEMO-001");
 
     // 3) 音频源：可选（WSL 常无声卡，失败不阻塞视频录制）
     audio_ = create_alsa_source();
@@ -53,7 +64,11 @@ bool Recorder::start(const Recorder::Config& c) {
     seg_.setCodecParams(encoder_->codecParams(),
                         has_audio_ ? aac_->codecParams() : nullptr);  // 双流参数
     seg_.onSegmentClosed([this](const std::string& p) {
-        append_manifest(cfg_.output_dir + "/manifest.sha256", p);
+        // 哈希链防篡改（B11）：每段链哈希含前段链哈希，任何段被替换/删除即断链
+        chain_append(cfg_.output_dir + "/manifest.sha256", p);
+        // 满盘循环覆盖（6.4.12）：每段落盘后检查配额，超限删最旧段（重点标记保护）
+        enforce_storage_quota(cfg_.output_dir, cfg_.storage_quota_bytes,
+                              cfg_.output_dir + "/manifest.sha256");
     });
 
     running_ = true;
@@ -62,10 +77,27 @@ bool Recorder::start(const Recorder::Config& c) {
     return true;
 }
 
+// 重点文件标记（6.2.20）：录像中将当前分段写入 manifest 标记行（附时间可信状态）
+void Recorder::triggerMark(const std::string& note) {
+    if (state_ != State::Recording && state_ != State::StoppingPending) return;
+    const std::string& seg = seg_.currentSegment();
+    if (seg.empty()) return;
+    auto& tc = TrustedClock::instance();
+    // 可信状态写进标记行：时间不可信的标记证据效力打折，取证时一眼可辨
+    std::string full_note = (tc.trusted() ? "[trusted-time] " : "[untrusted-time] ") + note;
+    mark_segment(cfg_.output_dir + "/manifest.sha256", seg, full_note);
+}
+
+// 用户触发"停止录像"：RECORDING -> StoppingPending（延录 post_record_ms 后由 run 线程收尾）
+void Recorder::triggerStop() {
+    if (state_ != State::Recording) return;
+    want_stop_ = true;  // 由 run() 线程在帧边界切换状态（与触发同一线程，无锁竞争）
+}
+
 // 用户触发"开始录像"：IDLE -> RECORDING。先回填预录（从最近 I 帧起），再进实时流。
 // 预录回填与实时写盘在同一线程（run 循环）串行执行，保证帧序与 PTS 单调。
 void Recorder::triggerRecord() {
-    if (!running_ || state_ == State::Recording) return;
+    if (!running_ || state_ == State::Recording || state_ == State::StoppingPending) return;
     want_record_ = true;  // 置位标志，由 run() 线程在帧边界执行回填（避免跨线程操作封装器）
 }
 
@@ -84,6 +116,12 @@ void Recorder::run() {
     while (running_) {
         VideoFrame raw;
         if (!video_->read(raw)) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue; }
+        // OSD 烧帧（编码前叠加，GA/T 947.2 6.2.8）：时间源为可信时钟（6.4.17），
+        // 不可信时加 * 前缀警示（证据效力打折，提醒校时）
+        if (osd_enabled_) {
+            auto& tc = TrustedClock::instance();
+            osd_.apply(raw, tc.wallClockSecs(), tc.trusted());
+        }
         VideoFrame enc;
         if (!encoder_->encode(raw, enc)) continue;
         ring_->push(enc);  // 预录缓冲始终更新（编码帧，~0.5MB/s）
@@ -97,7 +135,18 @@ void Recorder::run() {
             for (auto& f : pre) writeFrame(f);
             state_ = State::Recording;
         }
-        if (state_ == State::Recording) writeFrame(enc);
+        // 停止触发：RECORDING -> StoppingPending（延录），到截止时刻自动收尾回 Idle
+        if (want_stop_.exchange(false) && state_ == State::Recording) {
+            state_ = State::StoppingPending;
+            post_deadline_ms_ = now_ms() + cfg_.post_record_ms;
+        }
+        if (state_ == State::StoppingPending && now_ms() >= post_deadline_ms_) {
+            seg_.closeCurrent();   // 延录到点：收尾当前段，回 Idle（可再次触发）
+            state_ = State::Idle;
+        }
+        if (state_ == State::Recording ||
+            (state_ == State::StoppingPending && now_ms() < post_deadline_ms_))
+            writeFrame(enc);
     }
 }
 
@@ -153,7 +202,8 @@ void Recorder::audioLoop() {
         int64_t pts = audio_sample_cnt_;
         audio_sample_cnt_ += af.samples;
         pushAudioRing(enc, pts, af.pts_ms);
-        if (state_ != State::Recording) continue;
+        // Recording 与延录(StoppingPending)期间都持续写盘，延录到点回 Idle 后停
+        if (state_ == State::Idle) continue;
         writeAudioFrame(enc.data.data(), enc.data.size(), pts);
     }
 }

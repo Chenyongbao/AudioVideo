@@ -101,6 +101,7 @@ bwc_demo: libplatform.a
 bwc_demo: /usr/lib/x86_64-linux-gnu/libavcodec.so
 bwc_demo: /usr/lib/x86_64-linux-gnu/libavformat.so
 bwc_demo: /usr/lib/x86_64-linux-gnu/libavutil.so
+bwc_demo: /usr/lib/x86_64-linux-gnu/libavfilter.so
 bwc_demo: /usr/lib/x86_64-linux-gnu/libswscale.so
 bwc_demo: /usr/lib/x86_64-linux-gnu/libasound.so
 bwc_demo: /usr/lib/x86_64-linux-gnu/libcrypto.so

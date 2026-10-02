@@ -4,6 +4,7 @@
 #include "middleware/ring_buffer.hpp"
 #include "encoder/h264_encoder.hpp"
 #include "encoder/aac_encoder.hpp"
+#include "middleware/osd.hpp"
 #include "platform/video_source.hpp"
 #include "platform/audio_source.hpp"
 #include <atomic>
@@ -20,14 +21,18 @@ public:
         int bitrate_kbps = 4000;         // 对标 1080p 1h≤2.6GB ≈5.8Mbps，demo 用 4Mbps
         int64_t prerecord_ms = 30 * 1000; // 预录 30s（标准 ≥3s）
         int64_t segment_ms  = 30 * 1000;  // 分段 30s
+        int64_t post_record_ms = 25 * 60 * 1000; // 延录 25min（标准/采购要求，可配；demo 可调小）
+        int64_t storage_quota_bytes = 2LL * 1024 * 1024 * 1024; // 满盘配额（6.4.12），超限循环覆盖最旧段
     };
 
     ~Recorder() { stop(); }
     bool start(const Config& c);
     void triggerRecord();   // 状态机 IDLE -> RECORDING（含预录回填）
-    void stop();
+    void triggerStop();     // 停止触发：RECORDING -> StoppingPending（延录 post_record_ms 后停）
+    void triggerMark(const std::string& note = "");  // 重点文件标记（6.2.20）：写入 manifest
+    void stop();            // 立即停止（丢弃延录，收尾当前段）
 
-    enum class State { Idle, Recording };
+    enum class State { Idle, Recording, StoppingPending };  // StoppingPending=延录中
     State state() const { return state_; }
     bool isRunning() const { return running_; }
 
@@ -40,7 +45,9 @@ private:
     Config cfg_;
     std::atomic<bool> running_{false};
     std::atomic<State> state_{State::Idle};
-    std::atomic<bool> want_record_{false};  // 触发标志：run 线程在帧边界消费
+    std::atomic<bool> want_record_{false};   // 触发标志：run 线程在帧边界消费
+    std::atomic<bool> want_stop_{false};     // 停止触发标志：run 线程切 StoppingPending
+    int64_t post_deadline_ms_ = 0;           // 延录截止时刻（StoppingPending 进入时刻 + post_record_ms）
     std::thread worker_;
     std::thread audio_thread_;
     bool has_audio_ = false;
@@ -52,6 +59,8 @@ private:
     std::unique_ptr<AACEncoder> aac_;
     std::unique_ptr<EncodedFrameRing> ring_;
     SegmentManager seg_;
+    OsdOverlay osd_;                 // OSD 烧帧（编码前，烧进码流不可分离）
+    bool osd_enabled_ = false;
     int64_t audio_sample_cnt_ = 0;  // 音频样本计数（单调 pts 源，样本数=主时钟）
 
     // 音频预录环形缓存：编码后 AAC 帧按时间窗淘汰（64kbps 30s 仅 ~240KB）。

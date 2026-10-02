@@ -4,6 +4,7 @@
 CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
   /home/mrchen/body-worn-camera/encoder/aac_encoder.hpp \
   /home/mrchen/body-worn-camera/encoder/h264_encoder.hpp \
+  /home/mrchen/body-worn-camera/middleware/osd.hpp \
   /home/mrchen/body-worn-camera/middleware/recorder.hpp \
   /home/mrchen/body-worn-camera/middleware/ring_buffer.hpp \
   /home/mrchen/body-worn-camera/middleware/segment_manager.hpp \
@@ -324,6 +325,10 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
   /usr/include/x86_64-linux-gnu/libavcodec/codec_par.h \
   /usr/include/x86_64-linux-gnu/libavcodec/packet.h \
   /usr/include/x86_64-linux-gnu/libavcodec/version.h \
+  /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
+  /usr/include/x86_64-linux-gnu/libavfilter/buffersink.h \
+  /usr/include/x86_64-linux-gnu/libavfilter/buffersrc.h \
+  /usr/include/x86_64-linux-gnu/libavfilter/version.h \
   /usr/include/x86_64-linux-gnu/libavutil/attributes.h \
   /usr/include/x86_64-linux-gnu/libavutil/avconfig.h \
   /usr/include/x86_64-linux-gnu/libavutil/avutil.h \
@@ -344,6 +349,8 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
   /usr/include/x86_64-linux-gnu/libavutil/rational.h \
   /usr/include/x86_64-linux-gnu/libavutil/samplefmt.h \
   /usr/include/x86_64-linux-gnu/libavutil/version.h \
+  /usr/include/x86_64-linux-gnu/libswscale/swscale.h \
+  /usr/include/x86_64-linux-gnu/libswscale/version.h \
   /usr/include/x86_64-linux-gnu/sys/cdefs.h \
   /usr/include/x86_64-linux-gnu/sys/select.h \
   /usr/include/x86_64-linux-gnu/sys/single_threaded.h \
@@ -366,15 +373,13 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 
 /usr/include/x86_64-linux-gnu/sys/cdefs.h:
 
-/usr/include/x86_64-linux-gnu/libavutil/version.h:
+/usr/include/x86_64-linux-gnu/libswscale/swscale.h:
 
 /usr/include/x86_64-linux-gnu/libavutil/samplefmt.h:
 
 /usr/include/x86_64-linux-gnu/libavutil/pixfmt.h:
 
 /usr/include/x86_64-linux-gnu/libavutil/mem.h:
-
-/usr/include/x86_64-linux-gnu/libavutil/mathematics.h:
 
 /usr/include/x86_64-linux-gnu/libavutil/macros.h:
 
@@ -395,6 +400,18 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 /usr/include/x86_64-linux-gnu/libavutil/avconfig.h:
 
 /usr/include/x86_64-linux-gnu/libavutil/attributes.h:
+
+/usr/include/x86_64-linux-gnu/libavutil/version.h:
+
+/usr/include/x86_64-linux-gnu/libavfilter/version.h:
+
+/usr/include/x86_64-linux-gnu/libavfilter/buffersrc.h:
+
+/usr/include/x86_64-linux-gnu/libavfilter/buffersink.h:
+
+/usr/include/x86_64-linux-gnu/libavutil/mathematics.h:
+
+/usr/include/x86_64-linux-gnu/libavfilter/avfilter.h:
 
 /usr/include/x86_64-linux-gnu/libavcodec/version.h:
 
@@ -470,6 +487,8 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 
 /usr/include/x86_64-linux-gnu/bits/types.h:
 
+/usr/include/x86_64-linux-gnu/bits/timesize.h:
+
 /usr/include/c++/11/ext/type_traits.h:
 
 /usr/include/c++/11/bits/cxxabi_forced.h:
@@ -509,6 +528,8 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 /usr/include/c++/11/bits/cxxabi_init_exception.h:
 
 /usr/include/wchar.h:
+
+/usr/include/x86_64-linux-gnu/libswscale/version.h:
 
 /usr/include/c++/11/bits/stringfwd.h:
 
@@ -596,6 +617,10 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 
 /usr/include/c++/11/bits/ostream_insert.h:
 
+/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
+
+/usr/include/c++/11/cstdint:
+
 /usr/include/c++/11/ext/numeric_traits.h:
 
 /usr/include/c++/11/bits/atomic_base.h:
@@ -650,6 +675,8 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 
 /usr/include/c++/11/bits/align.h:
 
+/home/mrchen/body-worn-camera/middleware/osd.hpp:
+
 /usr/include/c++/11/vector:
 
 /usr/include/x86_64-linux-gnu/bits/getopt_core.h:
@@ -670,6 +697,10 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 
 /usr/include/x86_64-linux-gnu/bits/iscanonical.h:
 
+/home/mrchen/body-worn-camera/encoder/aac_encoder.hpp:
+
+/usr/include/c++/11/atomic:
+
 /usr/include/c++/11/bits/uses_allocator.h:
 
 /usr/include/c++/11/bits/unique_lock.h:
@@ -679,10 +710,6 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 /usr/include/c++/11/tr1/beta_function.tcc:
 
 /usr/include/c++/11/bits/nested_exception.h:
-
-/home/mrchen/body-worn-camera/encoder/aac_encoder.hpp:
-
-/usr/include/c++/11/atomic:
 
 /usr/include/c++/11/istream:
 
@@ -813,10 +840,6 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 /usr/include/x86_64-linux-gnu/gnu/stubs-64.h:
 
 /usr/include/c++/11/tr1/gamma.tcc:
-
-/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
-
-/usr/include/c++/11/cstdint:
 
 /usr/include/c++/11/bits/stl_algo.h:
 
@@ -1059,5 +1082,3 @@ CMakeFiles/bwc_demo.dir/main.cpp.o: /home/mrchen/body-worn-camera/main.cpp \
 /usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
 
 /usr/include/x86_64-linux-gnu/bits/strings_fortified.h:
-
-/usr/include/x86_64-linux-gnu/bits/timesize.h:

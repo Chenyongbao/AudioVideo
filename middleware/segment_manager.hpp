@@ -43,6 +43,9 @@ public:
         }
     }
 
+    // 当前分段路径（重点标记用；无活动段返回空）
+    const std::string& currentSegment() const { return cur_path_; }
+
 private:
     void ensureSegment(int64_t pts_ms) {
         if (writer_ && pts_ms - seg_start_ms_ < cfg_.segment_ms) return;

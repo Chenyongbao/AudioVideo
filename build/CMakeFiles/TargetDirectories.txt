@@ -3,5 +3,6 @@
 /home/mrchen/body-worn-camera/build/CMakeFiles/middleware.dir
 /home/mrchen/body-worn-camera/build/CMakeFiles/bwc_demo.dir
 /home/mrchen/body-worn-camera/build/CMakeFiles/aac_test.dir
+/home/mrchen/body-worn-camera/build/CMakeFiles/sync_test.dir
 /home/mrchen/body-worn-camera/build/CMakeFiles/edit_cache.dir
 /home/mrchen/body-worn-camera/build/CMakeFiles/rebuild_cache.dir

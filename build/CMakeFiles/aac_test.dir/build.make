@@ -102,6 +102,7 @@ aac_test: libplatform.a
 aac_test: /usr/lib/x86_64-linux-gnu/libavcodec.so
 aac_test: /usr/lib/x86_64-linux-gnu/libavformat.so
 aac_test: /usr/lib/x86_64-linux-gnu/libavutil.so
+aac_test: /usr/lib/x86_64-linux-gnu/libavfilter.so
 aac_test: /usr/lib/x86_64-linux-gnu/libswscale.so
 aac_test: /usr/lib/x86_64-linux-gnu/libasound.so
 aac_test: CMakeFiles/aac_test.dir/link.txt

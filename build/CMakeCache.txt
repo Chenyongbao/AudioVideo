@@ -252,6 +252,9 @@ pkgcfg_lib_ALSA_asound:FILEPATH=/usr/lib/x86_64-linux-gnu/libasound.so
 pkgcfg_lib_AV_avcodec:FILEPATH=/usr/lib/x86_64-linux-gnu/libavcodec.so
 
 //Path to a library.
+pkgcfg_lib_AV_avfilter:FILEPATH=/usr/lib/x86_64-linux-gnu/libavfilter.so
+
+//Path to a library.
 pkgcfg_lib_AV_avformat:FILEPATH=/usr/lib/x86_64-linux-gnu/libavformat.so
 
 //Path to a library.
@@ -312,10 +315,10 @@ AV_CFLAGS_OTHER:INTERNAL=
 AV_FOUND:INTERNAL=1
 AV_INCLUDEDIR:INTERNAL=
 AV_INCLUDE_DIRS:INTERNAL=/usr/include/x86_64-linux-gnu
-AV_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-lavcodec;-lavformat;-lavutil;-lswscale
+AV_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-lavcodec;-lavformat;-lavutil;-lavfilter;-lswscale
 AV_LDFLAGS_OTHER:INTERNAL=
 AV_LIBDIR:INTERNAL=
-AV_LIBRARIES:INTERNAL=avcodec;avformat;avutil;swscale
+AV_LIBRARIES:INTERNAL=avcodec;avformat;avutil;avfilter;swscale
 AV_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
 AV_LIBS:INTERNAL=
 AV_LIBS_L:INTERNAL=
@@ -327,10 +330,10 @@ AV_STATIC_CFLAGS:INTERNAL=-I/usr/include/x86_64-linux-gnu
 AV_STATIC_CFLAGS_I:INTERNAL=
 AV_STATIC_CFLAGS_OTHER:INTERNAL=
 AV_STATIC_INCLUDE_DIRS:INTERNAL=/usr/include/x86_64-linux-gnu
-AV_STATIC_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-lavformat;-lm;-lxml2;-lbz2;-lgme;-lopenmpt;-lstdc++;-lchromaprint;-lbluray;-lz;-lgnutls;-lrabbitmq;-lsrt-gnutls;-lssh;-lzmq;-lavcodec;-lvpx;-lm;-lvpx;-lm;-lvpx;-lm;-lvpx;-lm;-lwebpmux;-lwebp;-lm;-llzma;-ldav1d;-lrsvg-2;-lm;-lgio-2.0;-lgdk_pixbuf-2.0;-lgobject-2.0;-lglib-2.0;-lcairo;-lzvbi;-lm;-lpthread;-lm;-lpng;-lz;-lsnappy;-lstdc++;-lz;-laom;-lcodec2;-lgsm;-lmp3lame;-lm;-lopenjp2;-lopus;-lm;-lshine;-lspeex;-ltheoraenc;-ltheoradec;-logg;-ltwolame;-lvorbis;-lvorbisenc;-lwebp;-lx264;-lx265;-lxvidcore;-pthread;-lva;-lmfx;-lstdc++;-ldl;-lswresample;-lm;-lsoxr;-lswscale;-lm;-lavutil;-pthread;-lva-drm;-lva;-lva-x11;-lva;-lvdpau;-lX11;-lm;-ldrm;-lmfx;-lstdc++;-ldl;-lOpenCL;-lva;-lXv;-lX11;-lXext
+AV_STATIC_LDFLAGS:INTERNAL=-L/usr/lib/x86_64-linux-gnu;-lavfilter;-pthread;-lm;-lpocketsphinx;-lsphinxbase;-lsphinxad;-lbs2b;-llilv-0;-ldl;-lsratom-0;-lsord-0;-lserd-0;-lrubberband;-lsamplerate;-lstdc++;-lmysofa;-lflite_cmu_time_awb;-lflite_cmu_us_awb;-lflite_cmu_us_kal;-lflite_cmu_us_kal16;-lflite_cmu_us_rms;-lflite_cmu_us_slt;-lflite_usenglish;-lflite_cmulex;-lflite;-lfribidi;-lass;-lva;-lvidstab;-lm;-lgomp;-lzmq;-lzimg;-lOpenCL;-lfontconfig;-lfreetype;-lmfx;-lstdc++;-ldl;-lpostproc;-lm;-lavformat;-lm;-lxml2;-lbz2;-lgme;-lopenmpt;-lstdc++;-lchromaprint;-lbluray;-lz;-lgnutls;-lrabbitmq;-lsrt-gnutls;-lssh;-lzmq;-lavcodec;-lvpx;-lm;-lvpx;-lm;-lvpx;-lm;-lvpx;-lm;-lwebpmux;-lwebp;-lm;-llzma;-ldav1d;-lrsvg-2;-lm;-lgio-2.0;-lgdk_pixbuf-2.0;-lgobject-2.0;-lglib-2.0;-lcairo;-lzvbi;-lm;-lpthread;-lm;-lpng;-lz;-lsnappy;-lstdc++;-lz;-laom;-lcodec2;-lgsm;-lmp3lame;-lm;-lopenjp2;-lopus;-lm;-lshine;-lspeex;-ltheoraenc;-ltheoradec;-logg;-ltwolame;-lvorbis;-lvorbisenc;-lwebp;-lx264;-lx265;-lxvidcore;-pthread;-lva;-lmfx;-lstdc++;-ldl;-lswresample;-lm;-lsoxr;-lswscale;-lm;-lavutil;-pthread;-lva-drm;-lva;-lva-x11;-lva;-lvdpau;-lX11;-lm;-ldrm;-lmfx;-lstdc++;-ldl;-lOpenCL;-lva;-lXv;-lX11;-lXext
 AV_STATIC_LDFLAGS_OTHER:INTERNAL=-pthread
 AV_STATIC_LIBDIR:INTERNAL=
-AV_STATIC_LIBRARIES:INTERNAL=avformat;m;xml2;bz2;gme;openmpt;stdc++;chromaprint;bluray;z;gnutls;rabbitmq;srt-gnutls;ssh;zmq;avcodec;vpx;m;vpx;m;vpx;m;vpx;m;webpmux;webp;m;lzma;dav1d;rsvg-2;m;gio-2.0;gdk_pixbuf-2.0;gobject-2.0;glib-2.0;cairo;zvbi;m;pthread;m;png;z;snappy;stdc++;z;aom;codec2;gsm;mp3lame;m;openjp2;opus;m;shine;speex;theoraenc;theoradec;ogg;twolame;vorbis;vorbisenc;webp;x264;x265;xvidcore;va;mfx;stdc++;dl;swresample;m;soxr;swscale;m;avutil;va-drm;va;va-x11;va;vdpau;X11;m;drm;mfx;stdc++;dl;OpenCL;va;Xv;X11;Xext
+AV_STATIC_LIBRARIES:INTERNAL=avfilter;m;pocketsphinx;sphinxbase;sphinxad;bs2b;lilv-0;dl;sratom-0;sord-0;serd-0;rubberband;samplerate;stdc++;mysofa;flite_cmu_time_awb;flite_cmu_us_awb;flite_cmu_us_kal;flite_cmu_us_kal16;flite_cmu_us_rms;flite_cmu_us_slt;flite_usenglish;flite_cmulex;flite;fribidi;ass;va;vidstab;m;gomp;zmq;zimg;OpenCL;fontconfig;freetype;mfx;stdc++;dl;postproc;m;avformat;m;xml2;bz2;gme;openmpt;stdc++;chromaprint;bluray;z;gnutls;rabbitmq;srt-gnutls;ssh;zmq;avcodec;vpx;m;vpx;m;vpx;m;vpx;m;webpmux;webp;m;lzma;dav1d;rsvg-2;m;gio-2.0;gdk_pixbuf-2.0;gobject-2.0;glib-2.0;cairo;zvbi;m;pthread;m;png;z;snappy;stdc++;z;aom;codec2;gsm;mp3lame;m;openjp2;opus;m;shine;speex;theoraenc;theoradec;ogg;twolame;vorbis;vorbisenc;webp;x264;x265;xvidcore;va;mfx;stdc++;dl;swresample;m;soxr;swscale;m;avutil;va-drm;va;va-x11;va;vdpau;X11;m;drm;mfx;stdc++;dl;OpenCL;va;Xv;X11;Xext
 AV_STATIC_LIBRARY_DIRS:INTERNAL=/usr/lib/x86_64-linux-gnu
 AV_STATIC_LIBS:INTERNAL=
 AV_STATIC_LIBS_L:INTERNAL=
@@ -342,6 +345,11 @@ AV_libavcodec_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
 AV_libavcodec_MODULE_NAME:INTERNAL=libavcodec
 AV_libavcodec_PREFIX:INTERNAL=/usr
 AV_libavcodec_VERSION:INTERNAL=58.134.100
+AV_libavfilter_INCLUDEDIR:INTERNAL=/usr/include/x86_64-linux-gnu
+AV_libavfilter_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
+AV_libavfilter_MODULE_NAME:INTERNAL=libavfilter
+AV_libavfilter_PREFIX:INTERNAL=/usr
+AV_libavfilter_VERSION:INTERNAL=7.110.100
 AV_libavformat_INCLUDEDIR:INTERNAL=/usr/include/x86_64-linux-gnu
 AV_libavformat_LIBDIR:INTERNAL=/usr/lib/x86_64-linux-gnu
 AV_libavformat_MODULE_NAME:INTERNAL=libavformat
@@ -554,7 +562,7 @@ _OPENSSL_openssl_LIBDIR:INTERNAL=
 _OPENSSL_openssl_PREFIX:INTERNAL=
 _OPENSSL_openssl_VERSION:INTERNAL=
 __pkg_config_arguments_ALSA:INTERNAL=REQUIRED;IMPORTED_TARGET;alsa
-__pkg_config_arguments_AV:INTERNAL=REQUIRED;IMPORTED_TARGET;libavcodec;libavformat;libavutil;libswscale
+__pkg_config_arguments_AV:INTERNAL=REQUIRED;IMPORTED_TARGET;libavcodec;libavformat;libavutil;libswscale;libavfilter;libswscale
 __pkg_config_arguments__OPENSSL:INTERNAL=QUIET;openssl
 __pkg_config_checked_ALSA:INTERNAL=1
 __pkg_config_checked_AV:INTERNAL=1
@@ -563,6 +571,8 @@ __pkg_config_checked__OPENSSL:INTERNAL=1
 pkgcfg_lib_ALSA_asound-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_AV_avcodec
 pkgcfg_lib_AV_avcodec-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: pkgcfg_lib_AV_avfilter
+pkgcfg_lib_AV_avfilter-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_AV_avformat
 pkgcfg_lib_AV_avformat-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: pkgcfg_lib_AV_avutil

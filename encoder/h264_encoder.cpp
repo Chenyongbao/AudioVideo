@@ -42,6 +42,10 @@ public:
         AVDictionary* opt = nullptr;
         av_dict_set(&opt, "preset", "veryfast", 0);
         av_dict_set(&opt, "tune", "zerolatency", 0);
+        // 显式 CBR：nal-hrd=cbr + filler 强制填充到目标码率（GA/T 947.2 码控对标，
+        // 1080p 指标 1h ≤2.6GB ≈5.8Mbps；板端 MPP VENC 对应 CBR 模式）
+        av_dict_set(&opt, "x264-params", "nal-hrd=cbr:force-cfr=1", 0);
+        av_dict_set(&opt, "b:v", std::to_string((int64_t)bitrate_kbps * 1000).c_str(), 0);
         if (avcodec_open2(ctx_, codec, &opt) < 0) { av_dict_free(&opt); return false; }
         av_dict_free(&opt);
         // GLOBAL_HEADER 打开后 extradata 在 open 阶段即就绪，编码前就能取到 avcc 参数

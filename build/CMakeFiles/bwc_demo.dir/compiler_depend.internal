@@ -5,6 +5,7 @@ CMakeFiles/bwc_demo.dir/main.cpp.o
  /home/mrchen/body-worn-camera/main.cpp
  /home/mrchen/body-worn-camera/encoder/aac_encoder.hpp
  /home/mrchen/body-worn-camera/encoder/h264_encoder.hpp
+ /home/mrchen/body-worn-camera/middleware/osd.hpp
  /home/mrchen/body-worn-camera/middleware/recorder.hpp
  /home/mrchen/body-worn-camera/middleware/ring_buffer.hpp
  /home/mrchen/body-worn-camera/middleware/segment_manager.hpp
@@ -325,6 +326,10 @@ CMakeFiles/bwc_demo.dir/main.cpp.o
  /usr/include/x86_64-linux-gnu/libavcodec/codec_par.h
  /usr/include/x86_64-linux-gnu/libavcodec/packet.h
  /usr/include/x86_64-linux-gnu/libavcodec/version.h
+ /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersink.h
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersrc.h
+ /usr/include/x86_64-linux-gnu/libavfilter/version.h
  /usr/include/x86_64-linux-gnu/libavutil/attributes.h
  /usr/include/x86_64-linux-gnu/libavutil/avconfig.h
  /usr/include/x86_64-linux-gnu/libavutil/avutil.h
@@ -345,6 +350,8 @@ CMakeFiles/bwc_demo.dir/main.cpp.o
  /usr/include/x86_64-linux-gnu/libavutil/rational.h
  /usr/include/x86_64-linux-gnu/libavutil/samplefmt.h
  /usr/include/x86_64-linux-gnu/libavutil/version.h
+ /usr/include/x86_64-linux-gnu/libswscale/swscale.h
+ /usr/include/x86_64-linux-gnu/libswscale/version.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/select.h
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h

@@ -63,4 +63,5 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/middleware.dir/DependInfo.cmake"
   "CMakeFiles/bwc_demo.dir/DependInfo.cmake"
   "CMakeFiles/aac_test.dir/DependInfo.cmake"
+  "CMakeFiles/sync_test.dir/DependInfo.cmake"
   )

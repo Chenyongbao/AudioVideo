@@ -256,12 +256,21 @@ CMakeFiles/middleware.dir/middleware/recorder.cpp.o: \
  /usr/include/c++/11/bits/stl_deque.h /usr/include/c++/11/bits/deque.tcc \
  /home/mrchen/body-worn-camera/encoder/h264_encoder.hpp \
  /home/mrchen/body-worn-camera/encoder/aac_encoder.hpp \
+ /home/mrchen/body-worn-camera/middleware/osd.hpp \
+ /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/version.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersrc.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
+ /usr/include/x86_64-linux-gnu/libavfilter/buffersink.h \
+ /usr/include/x86_64-linux-gnu/libswscale/swscale.h \
+ /usr/include/x86_64-linux-gnu/libswscale/version.h \
  /home/mrchen/body-worn-camera/platform/video_source.hpp \
  /home/mrchen/body-worn-camera/platform/audio_source.hpp \
  /usr/include/c++/11/atomic /usr/include/c++/11/thread \
  /usr/include/c++/11/bits/std_thread.h \
  /usr/include/c++/11/bits/this_thread_sleep.h \
  /home/mrchen/body-worn-camera/middleware/integrity.hpp \
+ /home/mrchen/body-worn-camera/middleware/trusted_time.hpp \
  /usr/include/x86_64-linux-gnu/sys/stat.h \
  /usr/include/x86_64-linux-gnu/bits/stat.h \
  /usr/include/x86_64-linux-gnu/bits/struct_stat.h \
