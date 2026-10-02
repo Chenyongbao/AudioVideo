@@ -94,11 +94,12 @@ void Recorder::triggerStop() {
     want_stop_ = true;  // 由 run() 线程在帧边界切换状态（与触发同一线程，无锁竞争）
 }
 
-// 用户触发"开始录像"：IDLE -> RECORDING。先回填预录（从最近 I 帧起），再进实时流。
+// 用户触发"开始录像"：IDLE -> RECORDING（回填预录）；延录期(StoppingPending)再触发
+// 则重置延录窗口回到 RECORDING（真实设备语义：延录中再按"开始"=继续录，非忽略）。
 // 预录回填与实时写盘在同一线程（run 循环）串行执行，保证帧序与 PTS 单调。
 void Recorder::triggerRecord() {
-    if (!running_ || state_ == State::Recording || state_ == State::StoppingPending) return;
-    want_record_ = true;  // 置位标志，由 run() 线程在帧边界执行回填（避免跨线程操作封装器）
+    if (!running_ || state_ == State::Recording) return;
+    want_record_ = true;  // 置位标志，由 run() 线程在帧边界执行（避免跨线程操作封装器）
 }
 
 void Recorder::stop() {
@@ -127,13 +128,19 @@ void Recorder::run() {
         ring_->push(enc);  // 预录缓冲始终更新（编码帧，~0.5MB/s）
 
         // 触发检查（帧边界原子切换）：音频预录先回填 -> 视频预录回填 -> 进实时流
-        if (want_record_.exchange(false) && state_ == State::Idle) {
-            // 音频在前：回填触发前缓存帧（pts 沿用样本计数，单调）
-            for (auto& a : drainAudioRing()) writeAudioFrame(a.data.data(), a.data.size(), a.pts);
-            // 视频预录：从最近 I 帧开始的触发前帧
-            auto pre = ring_->drainForPrerecord();
-            for (auto& f : pre) writeFrame(f);
-            state_ = State::Recording;
+        if (want_record_.exchange(false)) {
+            if (state_ == State::StoppingPending) {
+                // 延录期再触发：重置延录窗口回 RECORDING（写盘不中断，无预录回填
+                // ——当前段一直在写，回填语义只适用于 IDLE 冷启动）
+                state_ = State::Recording;
+            } else if (state_ == State::Idle) {
+                // 音频在前：回填触发前缓存帧（pts 沿用样本计数，单调）
+                for (auto& a : drainAudioRing()) writeAudioFrame(a.data.data(), a.data.size(), a.pts);
+                // 视频预录：从最近 I 帧开始的触发前帧
+                auto pre = ring_->drainForPrerecord();
+                for (auto& f : pre) writeFrame(f);
+                state_ = State::Recording;
+            }
         }
         // 停止触发：RECORDING -> StoppingPending（延录），到截止时刻自动收尾回 Idle
         if (want_stop_.exchange(false) && state_ == State::Recording) {

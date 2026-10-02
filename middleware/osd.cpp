@@ -1,6 +1,10 @@
 #include "middleware/osd.hpp"
 #include <ctime>
 #include <cstdio>
+#include <unistd.h>  // access
+
+// 字体路径集中定义（板端无此文件则 init 显式失败，不静默黑屏）
+static const char* kFontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 
 extern "C" {
 #include <libavutil/imgutils.h>
@@ -16,6 +20,12 @@ OsdOverlay::~OsdOverlay() {
 
 bool OsdOverlay::init(int width, int height, int fps, const std::string& device_id) {
     w_ = width; h_ = height; fps_ = fps; device_id_ = device_id;
+    // 字体存在性检查：drawtext 对缺失 fontfile 会静默失败（帧上无字且无报错），
+    // init 时显式暴露（板端换 RGA 叠加，无此依赖）
+    if (access(kFontPath, F_OK) != 0) {
+        fprintf(stderr, "[osd] font missing: %s（OSD 将不可用）\n", kFontPath);
+        return false;
+    }
     sws_to_yuv_ = sws_getContext(w_, h_, AV_PIX_FMT_NV12,
                                  w_, h_, AV_PIX_FMT_YUV420P,
                                  SWS_BILINEAR, nullptr, nullptr, nullptr);
@@ -45,13 +55,13 @@ bool OsdOverlay::rebuildGraph(const std::string& text) {
     const AVFilter* dt = avfilter_get_by_name("drawtext");
     char desc1[512], desc2[512];
     snprintf(desc1, sizeof(desc1),
-             "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
-             "text='%s':fontcolor=white:fontsize=24:x=12:y=12:shadowx=2:shadowy=2",
-             text.c_str());
+             "fontfile=%s:"             // PC 端 drawtext 软画（板端换 RGA 通道叠加，
+             "text='%s':fontcolor=white:fontsize=24:x=12:y=12:shadowx=2:shadowy=2",  // 无逐秒重建开销）
+             kFontPath, text.c_str());
     snprintf(desc2, sizeof(desc2),
-             "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:"
+             "fontfile=%s:"
              "text='ID:%s':fontcolor=white:fontsize=20:x=12:y=44:shadowx=2:shadowy=2",
-             device_id_.c_str());
+             kFontPath, device_id_.c_str());
     AVFilterContext* dt1 = nullptr;
     AVFilterContext* dt2 = nullptr;
     if (avfilter_graph_create_filter(&dt1, dt, "dt1", desc1, nullptr, graph_) < 0)

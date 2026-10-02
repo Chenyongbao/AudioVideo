@@ -74,13 +74,11 @@ bool TrustedClock::sync() {
         fprintf(stderr, "[time] SNTP sync failed (%s)\n", cfg_.ntp_server.c_str());
         return false;
     }
-    // 记录偏移并校正系统时钟（PC 端需 root；板端设备时钟由本模块独占管理）
+    // 不改系统时钟（settimeofday 会造成 wall clock 回跳，导致录制中的 pts_ms /
+    // 分段文件名倒退冲突）。只记录偏移并维护内部 steady 基准：
+    // wallClockSecs() 以 steady 流逝时间外推，天然单调，不受墙钟跳变影响。
     int64_t sys_ms = (int64_t)time(nullptr) * 1000;
-    last_offset_ms_ = sys_ms - ntp_ms;  // 正=系统快，负=系统慢
-
-    timeval tv{ntp_ms / 1000, (ntp_ms % 1000) * 1000};
-    if (settimeofday(&tv, nullptr) != 0)
-        fprintf(stderr, "[time] settimeofday failed (%s)，仅记录偏移\n", strerror(errno));
+    last_offset_ms_ = sys_ms - ntp_ms;  // 正=系统快，负=系统慢（诊断用）
 
     {
         std::lock_guard<std::mutex> lk(base_m_);
@@ -88,7 +86,7 @@ bool TrustedClock::sync() {
         base_unix_ms_ = ntp_ms;
     }
     trusted_ = true;
-    fprintf(stderr, "[time] SNTP synced, offset=%lldms (trusted)\n",
+    fprintf(stderr, "[time] SNTP synced, offset=%lldms (trusted, internal base)\n",
             (long long)last_offset_ms_.load());
     return true;
 }

@@ -1,10 +1,13 @@
 #pragma once
 // 分段录像管理：无缝切换的关键 —— 切换在帧边界原子完成。
-// 每帧回调先判断是否到期，到期即 close 旧段 + open 新段，然后写帧，全程单写线程无锁竞争。
+// 线程模型：视频写盘(run 线程)与音频写盘(audioLoop 线程)并发，延录到点的
+// closeCurrent 也在 run 线程——用内部互斥锁把 写帧/切段/收尾 串行化，
+// 消除"音频包写进已关闭 writer"的竞态窗口（原为静默丢帧）。
 #include "muxer/fmp4_segment_writer.hpp"
 #include <memory>
 #include <string>
 #include <functional>
+#include <mutex>
 
 class SegmentManager {
 public:
@@ -23,11 +26,13 @@ public:
 
     // 供外部（录音回放预录帧）使用的帧入口：自动处理切段
     bool writeVideo(const AVPacket* pkt, AVRational tb, int64_t pts_ms) {
+        std::lock_guard<std::mutex> lk(m_);
         ensureSegment(pts_ms);
         if (!writer_) return false;
         return writer_->writeVideo(pkt, tb);
     }
     bool writeAudio(const AVPacket* pkt, AVRational tb) {
+        std::lock_guard<std::mutex> lk(m_);
         if (!writer_) return false;
         return writer_->writeAudio(pkt, tb);
     }
@@ -36,6 +41,15 @@ public:
     void onSegmentClosed(std::function<void(const std::string&)> cb) { closed_cb_ = std::move(cb); }
 
     void closeCurrent() {
+        std::lock_guard<std::mutex> lk(m_);
+        closeCurrentLocked();
+    }
+
+    // 当前分段路径（重点标记用；无活动段返回空）
+    const std::string& currentSegment() const { return cur_path_; }
+
+private:
+    void closeCurrentLocked() {
         if (writer_) {
             writer_->close();
             if (closed_cb_ && !cur_path_.empty()) closed_cb_(cur_path_);
@@ -43,13 +57,9 @@ public:
         }
     }
 
-    // 当前分段路径（重点标记用；无活动段返回空）
-    const std::string& currentSegment() const { return cur_path_; }
-
-private:
     void ensureSegment(int64_t pts_ms) {
         if (writer_ && pts_ms - seg_start_ms_ < cfg_.segment_ms) return;
-        closeCurrent();
+        closeCurrentLocked();
         char name[64];
         snprintf(name, sizeof(name), "/seg_%lld.mp4", (long long)pts_ms);
         cur_path_ = cfg_.dir + name;
@@ -66,6 +76,7 @@ private:
     Config cfg_;
     const AVCodecParameters* vpar_ = nullptr;
     const AVCodecParameters* apar_ = nullptr;
+    std::mutex m_;  // 串行化 writeVideo/writeAudio/closeCurrent（跨线程安全）
     std::unique_ptr<ISegmentWriter> writer_;
     std::string cur_path_;
     int64_t seg_start_ms_ = 0;

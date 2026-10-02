@@ -243,16 +243,16 @@ CMakeFiles/middleware.dir/middleware/recorder.cpp.o: \
  /usr/include/c++/11/bits/vector.tcc /usr/include/c++/11/bits/stl_algo.h \
  /usr/include/c++/11/bits/algorithmfwd.h \
  /usr/include/c++/11/bits/stl_heap.h \
- /usr/include/c++/11/bits/uniform_int_dist.h \
- /home/mrchen/body-worn-camera/middleware/ring_buffer.hpp \
- /home/mrchen/body-worn-camera/platform/common.hpp \
- /usr/include/c++/11/cstring /usr/include/c++/11/chrono \
- /usr/include/c++/11/ratio /usr/include/c++/11/ctime \
- /usr/include/c++/11/bits/parse_numbers.h /usr/include/c++/11/mutex \
+ /usr/include/c++/11/bits/uniform_int_dist.h /usr/include/c++/11/mutex \
+ /usr/include/c++/11/chrono /usr/include/c++/11/ratio \
+ /usr/include/c++/11/ctime /usr/include/c++/11/bits/parse_numbers.h \
  /usr/include/c++/11/system_error \
  /usr/include/x86_64-linux-gnu/c++/11/bits/error_constants.h \
  /usr/include/c++/11/stdexcept /usr/include/c++/11/bits/std_mutex.h \
- /usr/include/c++/11/bits/unique_lock.h /usr/include/c++/11/deque \
+ /usr/include/c++/11/bits/unique_lock.h \
+ /home/mrchen/body-worn-camera/middleware/ring_buffer.hpp \
+ /home/mrchen/body-worn-camera/platform/common.hpp \
+ /usr/include/c++/11/cstring /usr/include/c++/11/deque \
  /usr/include/c++/11/bits/stl_deque.h /usr/include/c++/11/bits/deque.tcc \
  /home/mrchen/body-worn-camera/encoder/h264_encoder.hpp \
  /home/mrchen/body-worn-camera/encoder/aac_encoder.hpp \

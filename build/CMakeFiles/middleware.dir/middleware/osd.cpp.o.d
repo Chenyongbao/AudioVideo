@@ -219,7 +219,15 @@ CMakeFiles/middleware.dir/middleware/osd.cpp.o: \
  /usr/include/x86_64-linux-gnu/libavfilter/avfilter.h \
  /usr/include/x86_64-linux-gnu/libavfilter/buffersink.h \
  /usr/include/x86_64-linux-gnu/libswscale/swscale.h \
- /usr/include/x86_64-linux-gnu/libswscale/version.h \
+ /usr/include/x86_64-linux-gnu/libswscale/version.h /usr/include/unistd.h \
+ /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
+ /usr/include/x86_64-linux-gnu/bits/environments.h \
+ /usr/include/x86_64-linux-gnu/bits/confname.h \
+ /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
+ /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
+ /usr/include/x86_64-linux-gnu/bits/unistd.h \
+ /usr/include/x86_64-linux-gnu/bits/unistd_ext.h \
+ /usr/include/linux/close_range.h \
  /usr/include/x86_64-linux-gnu/libavutil/imgutils.h \
  /usr/include/x86_64-linux-gnu/libavutil/pixdesc.h \
  /usr/include/x86_64-linux-gnu/libavutil/opt.h
