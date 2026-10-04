@@ -7,3 +7,4 @@ board/probe_vdec
 board/*.o
 board/test_*
 board/smoke_*
+board/detect_test
