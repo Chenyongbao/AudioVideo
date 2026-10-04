@@ -1,0 +1,327 @@
+// ============================================================================
+// 全链路板端主程序:收 NV12 裸帧(8888,WSL 侧已解码) → RGA 拷贝到 VENC 输入 → 推流(9999)
+// 端口与 relay 版一致,客户端 URL 不变(FFmpeg 自动探测 H.264 annexb 裸流)。
+// 流程: 主线程收帧 → RGA imcopy(NV12→VENC 输入 buffer) → VENC CBR 4Mbps @15fps → 观看端
+// 说明: 解码全部在 WSL 侧完成(板端 VDEC 解 422 JPEG 色度歧义、板端 libavcodec 解码丢色,
+//      WSL 驱动 YUYV corrupted,均实测)——板端只做 RGA 搬运 + 编码,链路最短、格式无歧义。
+// 用法: ./h264_pipeline [in_port=8888] [out_port=9999]
+// ============================================================================
+#include "mpp_h264_encoder.hpp"
+#include "recorder.hpp"
+#include <unistd.h>
+#include <time.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <poll.h>
+#include <stdio.h>
+#include <vector>
+#include <deque>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include "rga.h"
+#include "im2d.h"
+
+#define MAX_VIEWERS 8
+
+static int send_all(int sock, const void *buf, size_t len);   // 前置声明(定义在下方)
+
+// 每个观看端独立发送线程+有界队列:慢客户端只阻塞自己,绝不拖住处理管线
+struct Viewer {
+    int fd = -1;
+    std::deque<std::vector<uint8_t>> q;   // 待发 H.264 包
+    std::mutex m;
+    std::condition_variable cv;
+    bool dead = false;   // 发送失败/队列溢出,待主线程回收
+    bool quit = false;
+    std::thread th;
+};
+static Viewer *g_viewers[MAX_VIEWERS];   // nullptr = 空位(静态零初始化)
+static std::mutex g_vlock;               // 保护 g_viewers[] 与 g_hdr
+static uint8_t g_hdr[256];               // SPS/PPS 缓存,新观看端接入时先补发
+static uint32_t g_hdr_len = 0;
+static uint64_t g_frames = 0, g_bytes = 0;
+
+// ---- 录像:预录环形缓冲 + fMP4 断电安全写盘 ----
+static Recorder g_rec;
+static uint64_t nowMs() {
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// UDP 7777 控制通道:REC_START <w> <h> <fps> / REC_STOP / REC_STAT
+static void *control_thread(void *) {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in a{}; a.sin_family = AF_INET; a.sin_port = htons(7777);
+    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(s, (sockaddr *)&a, sizeof(a)) < 0) { perror("control bind"); return nullptr; }
+    char buf[256];
+    while (true) {
+        sockaddr_in from{}; socklen_t fl = sizeof(from);
+        ssize_t n = recvfrom(s, buf, sizeof(buf) - 1, 0, (sockaddr *)&from, &fl);
+        if (n <= 0) continue;
+        buf[n] = 0;
+        char resp[128];
+        if (!strncmp(buf, "REC_START", 9)) {
+            int w = 640, h = 480, fps = 15;
+            sscanf(buf, "REC_START %d %d %d", &w, &h, &fps);
+            char path[128];
+            snprintf(path, sizeof(path), "/userdata/rec_%llu.mp4", (unsigned long long)nowMs());
+            bool ok;
+            {
+                // SPS/PPS 缓存随 g_vlock 保护;可能尚未收到(观看端未接入过),为空则录出文件缺参数集
+                std::lock_guard<std::mutex> lk(g_vlock);
+                ok = g_rec.start(path, w, h, fps, g_hdr_len ? g_hdr : nullptr, g_hdr_len);
+            }
+            snprintf(resp, sizeof(resp), ok ? "OK %s" : "ERR %s", ok ? path : g_rec.lastError().c_str());
+        } else if (!strncmp(buf, "REC_STOP", 8)) {
+            uint64_t d = g_rec.recordedMs();
+            g_rec.stop();
+            snprintf(resp, sizeof(resp), "OK stopped %llu ms", (unsigned long long)d);
+        } else if (!strncmp(buf, "REC_STAT", 8)) {
+            snprintf(resp, sizeof(resp), "%s %llu ms", g_rec.recording() ? "REC" : "IDLE",
+                     (unsigned long long)g_rec.recordedMs());
+        } else {
+            snprintf(resp, sizeof(resp), "ERR unknown");
+        }
+        sendto(s, resp, strlen(resp), 0, (sockaddr *)&from, fl);
+    }
+    return nullptr;
+}
+
+static const size_t VIEWER_QMAX = 60;    // 队列上限,超限视为慢客户端直接踢掉(内存有界)
+
+static void viewer_thread(Viewer *v) {
+    while (true) {
+        std::vector<uint8_t> pkt;
+        {
+            std::unique_lock<std::mutex> lk(v->m);
+            v->cv.wait(lk, [&] { return v->quit || !v->q.empty(); });
+            if (v->quit && v->q.empty()) break;
+            pkt = std::move(v->q.front());
+            v->q.pop_front();
+        }
+        if (send_all(v->fd, pkt.data(), pkt.size()) < 0) break;
+    }
+    std::lock_guard<std::mutex> lk(g_vlock);
+    v->dead = true;   // 主线程 reap_dead 回收
+}
+
+// 异步广播:拷进各观看端队列立即返回(每帧 ~20KB 拷贝远比阻塞 send 便宜)
+static void broadcast(const uint8_t *p, uint32_t len) {
+    std::lock_guard<std::mutex> lk(g_vlock);
+    for (int i = 0; i < MAX_VIEWERS; i++) {
+        Viewer *v = g_viewers[i];
+        if (!v || v->dead) continue;
+        std::lock_guard<std::mutex> vl(v->m);
+        if (v->q.size() >= VIEWER_QMAX) { v->dead = true; continue; }   // 慢客户端踢掉
+        v->q.emplace_back(p, p + len);
+        v->cv.notify_one();
+    }
+}
+
+static int recv_all(int sock, void *buf, size_t len) {
+    uint8_t *p = (uint8_t *)buf;
+    while (len > 0) {
+        ssize_t n = recv(sock, p, len, 0);
+        if (n == 0) return -1;
+        if (n < 0) { if (errno == EINTR) continue; return -1; }
+        p += n; len -= n;
+    }
+    return 0;
+}
+
+static int send_all(int sock, const void *buf, size_t len) {
+    const uint8_t *p = (const uint8_t *)buf;
+    while (len > 0) {
+        ssize_t n = send(sock, p, len, MSG_NOSIGNAL);
+        if (n <= 0) { if (n < 0 && errno == EINTR) continue; return -1; }
+        p += n; len -= n;
+    }
+    return 0;
+}
+
+static void accept_viewer(int lsock) {
+    std::lock_guard<std::mutex> lk(g_vlock);
+    for (int i = 0; i < MAX_VIEWERS; i++) {
+        if (g_viewers[i]) continue;   // 占用槽位(dead 由 reap 回收)
+        int s = accept(lsock, nullptr, nullptr);
+        if (s < 0) return;
+        int nd = 1;
+        setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &nd, sizeof(nd));
+        // 先补发 SPS/PPS,否则接入方错过 GOP 头会报 non-existing PPS
+        if (g_hdr_len && send_all(s, g_hdr, g_hdr_len) < 0) { close(s); return; }
+        Viewer *v = new Viewer();
+        v->fd = s;
+        v->th = std::thread(viewer_thread, v);
+        g_viewers[i] = v;
+        fprintf(stderr, "[viewer] connected slot %d (hdr %uB)\n", i, g_hdr_len);
+        return;
+    }
+    int s = accept(lsock, nullptr, nullptr);
+    if (s >= 0) close(s);   // 满员
+}
+
+// 回收死亡观看端(join 发送线程,释放槽位)
+static void reap_dead() {
+    std::lock_guard<std::mutex> lk(g_vlock);
+    for (int i = 0; i < MAX_VIEWERS; i++) {
+        Viewer *v = g_viewers[i];
+        if (!v || !v->dead) continue;
+        { std::lock_guard<std::mutex> vl(v->m); v->quit = true; }
+        v->cv.notify_all();
+        v->th.join();
+        close(v->fd);
+        delete v;
+        g_viewers[i] = nullptr;
+        fprintf(stderr, "[viewer] slot %d reaped\n", i);
+    }
+}
+
+int main(int argc, char **argv) {
+    // 控制通道线程(UDP 7777:REC_START/STOP/STAT)
+    pthread_t ctl_tid;
+    pthread_create(&ctl_tid, nullptr, control_thread, nullptr);
+    int in_port = argc > 1 ? atoi(argv[1]) : 8888;
+    int out_port = argc > 2 ? atoi(argv[2]) : 9999;
+    // g_viewers[] 静态零初始化(nullptr=空位)
+
+    int reuse = 1;
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = INADDR_ANY;
+
+    // ---- 观看端监听(先开:观看端可先于发送端接入,连接不再报错) ----
+    int lout = socket(AF_INET, SOCK_STREAM, 0);
+    setsockopt(lout, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    a.sin_port = htons(out_port);
+    if (bind(lout, (sockaddr *)&a, sizeof(a)) < 0 || listen(lout, MAX_VIEWERS) < 0) {
+        perror("viewer bind/listen"); return 1;
+    }
+    fprintf(stderr, "serving h264 on %d...\n", out_port);
+
+    // ---- 收流监听 ----
+    int lin = socket(AF_INET, SOCK_STREAM, 0);
+    setsockopt(lin, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    a.sin_port = htons(in_port);
+    if (bind(lin, (sockaddr *)&a, sizeof(a)) < 0 || listen(lin, 1) < 0) {
+        perror("input bind/listen"); return 1;
+    }
+
+    static uint8_t buf[4 * 1024 * 1024];
+    struct pollfd pfd{};
+    pfd.fd = lout;
+    pfd.events = POLLIN;
+
+    while (true) {   // 会话循环:发送端断开不退出,等下一个接入(观看端保持连接)
+        fprintf(stderr, "waiting sender on %d...\n", in_port);
+        int in_sock = accept(lin, nullptr, nullptr);
+        if (in_sock < 0) { perror("accept sender"); usleep(500000); continue; }
+        fprintf(stderr, "[sender] connected\n");
+
+        // ---- 处理链(每会话新建,VENC 参数在首帧确定) ----
+        MppH264Encoder enc;
+        bool enc_ready = false;
+        int w = 0, h = 0;
+        uint8_t hdr[4];
+
+        while (true) {
+        if (recv_all(in_sock, hdr, 4) < 0) { fprintf(stderr, "[sender] closed\n"); break; }
+        uint32_t len = hdr[0] | (hdr[1] << 8) | (hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
+        if (len == 0 || len > sizeof(buf)) break;
+        if (recv_all(in_sock, buf, len) < 0) break;
+        if (len != 614400 && len != 460800) { fprintf(stderr, "[in] bad nv12 len %u\n", len); break; }
+        g_frames++;
+
+        if (!enc_ready) {
+            w = 640; h = 480;
+            // VENC:CBR 4Mbps @15fps(与 YUYV 采集帧率对齐,避免编码节奏漂移)
+            if (!enc.open(w, h, 15, 4000000)) {
+                fprintf(stderr, "[venc] open failed: %s\n", enc.lastError().c_str());
+                break;
+            }
+            enc_ready = true;
+            fprintf(stderr, "[pipe] %dx%d pipeline ready (yuyv→nv12 @15fps)\n", w, h);
+        }
+
+        // ① RGA:收到的 NV12(虚拟地址)→ VENC 输入 fd,硬件搬运
+        // 注意 wrapbuffer_fd 宏参数序:(fd, w, h, format, wstride, hstride)
+        rga_buffer_t src = wrapbuffer_virtualaddr(buf, w, h, RK_FORMAT_YCbCr_420_SP, w, h);
+        rga_buffer_t dst = wrapbuffer_fd(enc.inputFd(), w, h, RK_FORMAT_YCbCr_420_SP);
+        IM_STATUS st = imcopy(src, dst, 1);
+        if ((int)st < 1) {
+            fprintf(stderr, "[rga] imcopy: %s\n", imStrError(st));
+            break;
+        }
+
+        // 诊断 dump(仅首帧一次):RGA 写入后的 VENC 输入,验证 YUYV→NV12 正确
+        if (g_frames == 1) {
+            FILE *fd2 = fopen("/tmp/venc_in.raw", "wb");
+            if (fd2) { fwrite(mpp_buffer_get_ptr(enc.inputBuffer()), 1, (size_t)w * h * 3 / 2, fd2); fclose(fd2); }
+            fprintf(stderr, "[dump] venc_in written\n");
+        }
+
+        // ② VENC:直接编码 inputBuffer(RGA 已写入),广播给观看端;首包(SPS/PPS)缓存供新观看端补发
+        enc.encodeDirect(
+                          [&](const uint8_t *p, uint32_t plen, bool key) {
+                              {
+                                  std::lock_guard<std::mutex> lk(g_vlock);
+                                  if (key && plen < sizeof(g_hdr) && g_hdr_len == 0) {
+                                      memcpy(g_hdr, p, plen);
+                                      g_hdr_len = plen;
+                                  }
+                              }
+                              g_bytes += plen;
+                              // SPS/PPS 头包(~38B)与首帧同 ts,喂进 recorder 会造成 DTS 重复,过滤
+                              if (plen > 1000)
+                                  g_rec.feed(p, plen, key, nowMs());   // 录像:实时包喂 recorder(录制中写盘/空闲入预录缓冲)
+                              broadcast(p, plen);   // 异步:入队即返回,慢客户端不阻塞
+                              return true;
+                          });
+
+        // 非阻塞接受新观看端 + 回收死亡观看端
+        fcntl(lout, F_SETFL, O_NONBLOCK);
+        if (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
+            accept_viewer(lout);
+        fcntl(lout, F_SETFL, 0);
+        reap_dead();
+
+        if (g_frames % 100 == 0)
+            fprintf(stderr, "[%lu] %.1f fps cum, %.1f KB out\n",
+                    (unsigned long)g_frames, 0.0, g_bytes / 1024.0);
+        }   // 帧循环结束(发送端断开/协议错)
+
+        close(in_sock);
+        fprintf(stderr, "sender left, total %lu frames, %.1f KB h264\n",
+                (unsigned long)g_frames, g_bytes / 1024.0);
+    }   // 会话循环:回到等下一个发送端(观看端保持连接)
+
+    // 以下在会话循环永不退出时不可达,保留以防未来增加退出条件
+    {
+        std::lock_guard<std::mutex> lk(g_vlock);
+        for (int i = 0; i < MAX_VIEWERS; i++) {
+            Viewer *v = g_viewers[i];
+            if (!v) continue;
+            std::lock_guard<std::mutex> vl(v->m);
+            v->quit = true;
+            v->cv.notify_all();
+        }
+    }
+    for (int i = 0; i < MAX_VIEWERS; i++) {
+        Viewer *v = g_viewers[i];
+        if (!v) continue;
+        if (v->th.joinable()) v->th.join();
+        close(v->fd);
+        delete v;
+    }
+    close(lin); close(lout);
+    return 0;
+}

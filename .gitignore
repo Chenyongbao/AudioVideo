@@ -1,0 +1,7 @@
+*.mp4
+wslcamera/mjpeg_sender
+wslcamera/yuyv_sender
+wslcamera/mjpeg_nv12_sender
+board/h264_pipeline
+board/probe_vdec
+board/*.o

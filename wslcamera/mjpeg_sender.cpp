@@ -1,11 +1,15 @@
 // ============================================================================
-// 最小推流程序：V4L2 MJPG 采集 → TCP 发送（WSL 端）
-// 用法: ./mjpeg_sender /dev/video0 <板子IP> [端口=8888]
-// 协议（极简帧协议，板端接收程序同款）:
-//   每帧: [4 字节小端长度 N][N 字节 MJPEG 数据]
+// 推流程序：V4L2 YUYV 4:2:2 采集 → TCP 发送（WSL 端）
+// 用法: ./yuyv_sender   (设备/IP/端口已定死,改配置直接改下方常量)
+// 协议(极简帧协议,板端接收程序同款):
+//   每帧: [4 字节小端长度 N][N 字节 YUYV 裸数据(614400 字节, 640x480)]
+// 说明:
+//   - 弃 MJPEG:板端 VDEC 解 4:2:2 JPEG 有色度格式歧义(色度 bug 根源),
+//     改发 YUYV 裸流,板端 RGA 直接转 NV12,无任何解码环节
+//   - 15fps 而非 30fps:YUYV@30 = 147Mbps 超板端百兆网口(100Mbps)
 // 延迟优化:
-//   - TCP_NODELAY:禁用 Nagle 攒包,小帧立即发出(否则最多攒 ~40ms)
-//   - 采集缓冲 4→2 帧:减少 V4L2 队列排队深度(每帧 -33ms)
+//   - TCP_NODELAY:禁用 Nagle 攒包
+//   - 采集缓冲 2 帧:浅缓冲低延迟
 // ============================================================================
 #include <fcntl.h>
 #include <unistd.h>
@@ -21,6 +25,11 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+
+// ---- 固定配置(定死,不再走命令行参数) ----
+static const char *kDev     = "/dev/video0";        // 摄像头设备(UVC)
+static const char *kBoardIp = "192.168.137.250";    // RV1126 板子 IP
+static const int   kPort    = 8888;                 // 板端收流端口
 
 static int xioctl(int fd, unsigned long req, void* arg) {
     int r;
@@ -40,11 +49,19 @@ static int open_camera(const char* dev, int w, int h) {
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     fmt.fmt.pix.width = w;
     fmt.fmt.pix.height = h;
-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;   // YUYV 4:2:2:色度无歧义,绕开 JPEG/VDEC 格式玄学
     if (xioctl(fd, VIDIOC_S_FMT, &fmt) < 0) { perror("S_FMT"); return -1; }
-    printf("camera: %ux%u pixfmt=%c%c%c%c\n", fmt.fmt.pix.width, fmt.fmt.pix.height,
+    printf("camera: %ux%u pixfmt=%c%c%c%c bytes/line=%u\n", fmt.fmt.pix.width, fmt.fmt.pix.height,
            fmt.fmt.pix.pixelformat & 0xFF, (fmt.fmt.pix.pixelformat >> 8) & 0xFF,
-           (fmt.fmt.pix.pixelformat >> 16) & 0xFF, (fmt.fmt.pix.pixelformat >> 24) & 0xFF);
+           (fmt.fmt.pix.pixelformat >> 16) & 0xFF, (fmt.fmt.pix.pixelformat >> 24) & 0xFF,
+           fmt.fmt.pix.bytesperline);
+
+    // 帧率:YUYV 640x480@30 裸流 147Mbps 超百兆网口,定 15fps(74Mbps 留裕量)
+    v4l2_streamparm parm{};
+    parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    parm.parm.capture.timeperframe.numerator = 1;
+    parm.parm.capture.timeperframe.denominator = 15;
+    if (xioctl(fd, VIDIOC_S_PARM, &parm) < 0) perror("S_PARM (fps, 继续)");
 
     v4l2_requestbuffers req{};
     req.count = NBUF;
@@ -79,24 +96,20 @@ static int send_all(int sock, const void* data, size_t len) {
     return 0;
 }
 
-int main(int argc, char** argv) {
-    const char* dev = argc > 1 ? argv[1] : "/dev/video0";
-    if (argc < 3) { fprintf(stderr, "usage: %s /dev/video0 <board_ip> [port]\n", argv[0]); return 1; }
-    int port = argc > 3 ? atoi(argv[3]) : 8888;
-
-    int cam = open_camera(dev, 640, 480);
+int main() {
+    int cam = open_camera(kDev, 640, 480);
     if (cam < 0) return 1;
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(argv[2]);
+    addr.sin_port = htons(kPort);
+    addr.sin_addr.s_addr = inet_addr(kBoardIp);
     if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) { perror("connect"); return 1; }
     // TCP_NODELAY:每帧立即发,不让 Nagle 攒小包(局域网低延迟关键项)
     int nd = 1;
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &nd, sizeof(nd));
-    printf("connected to %s:%d (nodelay, nbuf=%d)\n", argv[2], port, NBUF);
+    printf("connected to %s:%d (nodelay, nbuf=%d)\n", kBoardIp, kPort, NBUF);
 
     uint64_t frames = 0;
     while (true) {
