@@ -10,6 +10,10 @@
 #include "recorder.hpp"
 #include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/statvfs.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +61,13 @@ static uint64_t nowMs() {
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+// /userdata 所在分区剩余字节(df);获取失败返回 -1(不拦截)
+static long long diskFreeBytes() {
+    struct statvfs st;
+    if (statvfs("/userdata", &st) < 0) return -1;
+    return (long long)st.f_bavail * st.f_frsize;
+}
+
 // UDP 7777 控制通道:REC_START <w> <h> <fps> / REC_STOP / REC_STAT
 static void *control_thread(void *) {
     int s = socket(AF_INET, SOCK_DGRAM, 0);
@@ -73,8 +84,27 @@ static void *control_thread(void *) {
         if (!strncmp(buf, "REC_START", 9)) {
             int w = 640, h = 480, fps = 15;
             sscanf(buf, "REC_START %d %d %d", &w, &h, &fps);
+            // 空间保护:剩余 <50MB 拒录(4Mbps ≈ 30MB/min,50MB 只够 1 分多钟)
+            long long free_b = diskFreeBytes();
+            if (free_b >= 0 && free_b < 50LL * 1024 * 1024) {
+                snprintf(resp, sizeof(resp), "ERR disk low %lld MB", free_b / 1024 / 1024);
+                sendto(s, resp, strlen(resp), 0, (sockaddr *)&from, fl);
+                continue;
+            }
             char path[128];
-            snprintf(path, sizeof(path), "/userdata/rec_%llu.mp4", (unsigned long long)nowMs());
+            // 可信时间戳:TIME_SET 校准后文件名即真实时间;未校准(1970)回退单调 ms
+            {
+                time_t t = time(nullptr);
+                if (t > 1600000000) {
+                    struct tm tmv;
+                    localtime_r(&t, &tmv);
+                    snprintf(path, sizeof(path), "/userdata/rec_%04d%02d%02d_%02d%02d%02d.mp4",
+                             tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
+                             tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+                } else {
+                    snprintf(path, sizeof(path), "/userdata/rec_%llu.mp4", (unsigned long long)nowMs());
+                }
+            }
             bool ok;
             {
                 // SPS/PPS 缓存随 g_vlock 保护;可能尚未收到(观看端未接入过),为空则录出文件缺参数集
@@ -86,6 +116,57 @@ static void *control_thread(void *) {
             uint64_t d = g_rec.recordedMs();
             g_rec.stop();
             snprintf(resp, sizeof(resp), "OK stopped %llu ms", (unsigned long long)d);
+        } else if (!strncmp(buf, "TIME_SET", 8)) {
+            // 客户端把自己的 epoch 秒发来校准板钟(板无 RTC,开机为 1970)
+            // 之后录像文件名/MP4 creation_time 均为真实时间
+            long long ep = 0;
+            sscanf(buf, "TIME_SET %lld", &ep);
+            if (ep > 1600000000) {   // 合理性:2020 之后
+                struct timeval tv{(time_t)ep, 0};
+                settimeofday(&tv, nullptr);
+                snprintf(resp, sizeof(resp), "OK time %lld", ep);
+            } else {
+                snprintf(resp, sizeof(resp), "ERR bad epoch %lld", ep);
+            }
+        } else if (!strncmp(buf, "FILE_LIST", 9)) {
+            // 列出 /userdata 下的录像:每行 "文件名 字节数",单包回复(录像文件量级 ~几十个)
+            DIR *d = opendir("/userdata");
+            if (!d) {
+                snprintf(resp, sizeof(resp), "ERR opendir");
+                sendto(s, resp, strlen(resp), 0, (sockaddr *)&from, fl);
+                continue;
+            }
+            static char list[16384];
+            size_t off = 0;
+            struct dirent *e;
+            while ((e = readdir(d)) && off < sizeof(list) - 64) {
+                const char *nm = e->d_name;
+                if (strncmp(nm, "rec_", 4) || strlen(nm) < 8 || strcmp(nm + strlen(nm) - 4, ".mp4"))
+                    continue;
+                struct stat st;
+                char full[160];
+                snprintf(full, sizeof(full), "/userdata/%s", nm);
+                if (stat(full, &st) < 0) continue;
+                off += (size_t)snprintf(list + off, sizeof(list) - off, "%s %lld\n",
+                                        nm, (long long)st.st_size);
+            }
+            closedir(d);
+            if (off == 0) off = (size_t)snprintf(list, sizeof(list), "(empty)\n");
+            sendto(s, list, off, 0, (sockaddr *)&from, fl);
+            continue;
+        } else if (!strncmp(buf, "FILE_DEL ", 9)) {
+            // 删除指定录像:严格校验文件名(只允许 rec_ 开头/.mp4 结尾/无路径分隔),防路径穿越
+            const char *nm = buf + 9;
+            bool safe = !strncmp(nm, "rec_", 4) && strlen(nm) > 8 &&
+                        !strcmp(nm + strlen(nm) - 4, ".mp4") &&
+                        !strchr(nm, '/') && !strchr(nm, '\\') && !strstr(nm, "..");
+            if (!safe) {
+                snprintf(resp, sizeof(resp), "ERR bad name");
+            } else {
+                char full[160];
+                snprintf(full, sizeof(full), "/userdata/%s", nm);
+                snprintf(resp, sizeof(resp), unlink(full) == 0 ? "OK deleted %s" : "ERR unlink %s", nm);
+            }
         } else if (!strncmp(buf, "REC_STAT", 8)) {
             snprintf(resp, sizeof(resp), "%s %llu ms", g_rec.recording() ? "REC" : "IDLE",
                      (unsigned long long)g_rec.recordedMs());
@@ -293,6 +374,15 @@ int main(int argc, char **argv) {
             accept_viewer(lout);
         fcntl(lout, F_SETFL, 0);
         reap_dead();
+
+        // 空间保护:录制中每秒查一次,剩余 <20MB 自动停录(防写满根分区)
+        if (g_rec.recording() && (g_frames % 15) == 0) {
+            long long fb = diskFreeBytes();
+            if (fb >= 0 && fb < 20LL * 1024 * 1024) {
+                fprintf(stderr, "[rec] disk low %lld MB, auto stop\n", fb / 1024 / 1024);
+                g_rec.stop();
+            }
+        }
 
         if (g_frames % 100 == 0)
             fprintf(stderr, "[%lu] %.1f fps cum, %.1f KB out\n",

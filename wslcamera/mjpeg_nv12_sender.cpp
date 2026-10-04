@@ -51,6 +51,69 @@ static void draw_latency_patch(uint8_t *nv12, int w, int h) {
         memset(uv + r * w + 16 / 2, 128, 48 / 2);
 }
 
+// ---- OSD 时间戳:5x7 点阵字体烧进视频帧(采集时刻凭证) ----
+// 行式点阵,bit0=最左列;覆盖 "0-9 : - 空格" 足够时间戳使用
+static const uint8_t kFont[13][7] = {
+    {0x0E,0x11,0x13,0x15,0x19,0x11,0x0E},  // 0
+    {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E},  // 1
+    {0x0E,0x11,0x01,0x02,0x04,0x08,0x1F},  // 2
+    {0x1F,0x02,0x04,0x02,0x01,0x11,0x0E},  // 3
+    {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02},  // 4
+    {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E},  // 5
+    {0x06,0x08,0x10,0x1E,0x11,0x11,0x0E},  // 6
+    {0x1F,0x01,0x02,0x04,0x08,0x08,0x08},  // 7
+    {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E},  // 8
+    {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C},  // 9
+    {0x00,0x04,0x00,0x00,0x04,0x00,0x00},  // :
+    {0x00,0x00,0x00,0x0E,0x00,0x00,0x00},  // -
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00},  // 空格
+};
+static int fontIdx(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c == ':') return 10;
+    if (c == '-') return 11;
+    return 12;
+}
+static void drawCharY(uint8_t *nv12, int w, int h, int x0, int y0, char c, int sc, uint8_t yv) {
+    const uint8_t *g = kFont[fontIdx(c)];
+    for (int r = 0; r < 7; r++)
+        for (int cbit = 0; cbit < 5; cbit++) {
+            if (!((g[r] >> cbit) & 1)) continue;
+            for (int dy = 0; dy < sc; dy++) {
+                int y = y0 + r * sc + dy;
+                if (y < 0 || y >= h) continue;
+                uint8_t *row = nv12 + y * w;
+                for (int dx = 0; dx < sc; dx++) {
+                    int x = x0 + cbit * sc + dx;
+                    if (x >= 0 && x < w) row[x] = yv;
+                }
+            }
+        }
+}
+// "YYYY-MM-DD HH:MM:SS" 黑底白字,画在延迟色块下方(y=92,缩放2x)
+static void draw_osd_time(uint8_t *nv12, int w, int h) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm tmv;
+    time_t sec = ts.tv_sec;
+    localtime_r(&sec, &tmv);
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmv);
+
+    const int sc = 2, cw = 6 * sc;             // 字宽(5+1间距)*缩放
+    const int bw = (int)strlen(buf) * cw + 8, bh = 7 * sc + 8, bx = 12, by = 90;
+    // 黑底(Y=16)+UV=128(无色)
+    for (int r = by; r < by + bh && r < h; r++) {
+        uint8_t *row = nv12 + r * w;
+        memset(row + bx, 16, (bx + bw < w) ? bw : w - bx);
+    }
+    uint8_t *uv = nv12 + (size_t)w * h;
+    for (int r = by / 2; r < (by + bh) / 2 && r < h / 2; r++)
+        memset(uv + r * w + bx / 2, 128, bw / 2);
+    for (int i = 0; buf[i]; i++)
+        drawCharY(nv12, w, h, bx + 4 + i * cw, by + 4, buf[i], sc, 235);
+}
+
 // ---- 固定配置(定死,不再走命令行参数) ----
 static const char *kDev     = "/dev/video0";        // 摄像头设备(UVC)
 static const char *kBoardIp = "192.168.137.250";    // RV1126 板子 IP
@@ -189,6 +252,7 @@ int main() {
         xioctl(cam, VIDIOC_QBUF, &b);
         if (!ok) { fprintf(stderr, "decode fail\n"); continue; }
         draw_latency_patch(codec.nv12, kW, kH);   // 延迟测量色块(WSL 时钟,画进帧里)
+        draw_osd_time(codec.nv12, kW, kH);        // OSD 时间戳(采集时刻,随流进录像)
 
         uint32_t len = kW * kH * 3 / 2;
         uint8_t hdr[4] = {(uint8_t)(len & 0xFF), (uint8_t)(len >> 8), (uint8_t)(len >> 16), (uint8_t)(len >> 24)};
