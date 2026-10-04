@@ -10,6 +10,7 @@
 #include "recorder.hpp"
 #include "rtsp_server.hpp"
 #include "hashchain.hpp"
+#include "yolo_detector.hpp"
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -59,9 +60,55 @@ static uint64_t g_frames = 0, g_bytes = 0;
 // ---- 录像:预录环形缓冲 + fMP4 断电安全写盘 ----
 static Recorder g_rec;
 static RtspServer g_rtsp;   // 标准 RTSP 发布(8554/live),替代裸 TCP 9999 的对外段
+
+// ---- NPU 人/车检测(5fps 抽帧,不阻塞编码链)----
+static YoloDetector g_yolo;
+static std::mutex g_detLock;                 // 保护 g_lastDets(7778 推送线程读)
+static std::vector<DetBox> g_lastDets;       // 最新一帧检测结果(源帧坐标)
+static uint64_t g_lastDetTs = 0;
+static uint64_t g_lastMarkMs = 0;            // 自动打点冷却(同类 10s)
 static uint64_t nowMs() {
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// 自动打点阈值(默认 0.5;YOLO_MARK_TH 环境变量可覆盖,测试/调试用)
+static float markTh() {
+    static float th = -1;
+    if (th < 0) {
+        const char *e = getenv("YOLO_MARK_TH");
+        th = (e && atof(e) > 0) ? atof(e) : 0.5f;
+    }
+    return th;
+}
+
+// 检测线程上下文回调:缓存最新框(7778 推送用)+ 人/车自动打点(10s 冷却)
+static void onDetections(const std::vector<DetBox> &dets, uint64_t ts) {
+    bool interesting = false;
+    float bestProp = 0;
+    const char *bestName = "";
+    for (const auto &d : dets) {
+        if (!strcmp(d.name, "person") || !strcmp(d.name, "car") || !strcmp(d.name, "truck") ||
+            !strcmp(d.name, "bus") || !strcmp(d.name, "motorcycle") || !strcmp(d.name, "bicycle")) {
+            interesting = true;
+            if (d.prop > bestProp) { bestProp = d.prop; bestName = d.name; }
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lk(g_detLock);
+        g_lastDets = dets;
+        g_lastDetTs = ts;
+    }
+    if (interesting && bestProp >= markTh()) {
+        uint64_t now = nowMs();
+        if (now - g_lastMarkMs > 10000) {          // 同类事件 10s 冷却防刷屏
+            g_lastMarkMs = now;
+            char txt[64];
+            snprintf(txt, sizeof(txt), "AUTO %s %.2f", bestName, bestProp);
+            if (g_rec.mark(txt))                    // 落 .meta → 时间轴▲ → 证据链体系
+                fprintf(stderr, "[yolo] auto mark: %s\n", txt);
+        }
+    }
 }
 
 // /userdata 所在分区剩余字节(df);获取失败返回 -1(不拦截)
@@ -129,6 +176,23 @@ static void *control_thread(void *) {
             static std::string report;   // static 缓冲避免悬空(单线程控制通道,安全)
             report = hashchain_verify();
             sendto(s, report.data(), report.size(), 0, (sockaddr *)&from, fl);
+            continue;
+        } else if (!strncmp(buf, "DET_GET", 7)) {
+            // NPU 检测框拉取(Qt ~5fps 轮询):JSON 数组,仅预览画框用(不进录像帧)
+            static std::string detJson;
+            detJson = "[";
+            {
+                std::lock_guard<std::mutex> lk(g_detLock);
+                char one[128];
+                for (size_t i = 0; i < g_lastDets.size(); i++) {
+                    const DetBox &d = g_lastDets[i];
+                    snprintf(one, sizeof(one), "%s{\"n\":\"%s\",\"p\":%.2f,\"b\":[%d,%d,%d,%d]}",
+                             i ? "," : "", d.name, d.prop, d.x1, d.y1, d.x2, d.y2);
+                    detJson += one;
+                }
+            }
+            detJson += "]";
+            sendto(s, detJson.data(), detJson.size(), 0, (sockaddr *)&from, fl);
             continue;
         } else if (!strncmp(buf, "TIME_SET", 8)) {
             // 客户端把自己的 epoch 秒发来校准板钟(板无 RTC,开机为 1970)
@@ -294,6 +358,12 @@ int main(int argc, char **argv) {
     // RTSP 服务器(8554/live):标准协议对外发布 VENC 输出
     if (!g_rtsp.start(8554, "live"))
         fprintf(stderr, "[rtsp] start failed, 只保留裸 TCP 9999\n");
+
+    // NPU 检测线程(模型缺失则功能自动关闭,不影响编码主链)
+    if (g_yolo.init("/userdata/yolov5s.rknn"))
+        g_yolo.start(onDetections);
+    else
+        fprintf(stderr, "[yolo] disabled (model missing)\n");
     int in_port = argc > 1 ? atoi(argv[1]) : 8888;
     int out_port = argc > 2 ? atoi(argv[2]) : 9999;
     // g_viewers[] 静态零初始化(nullptr=空位)
@@ -355,6 +425,9 @@ int main(int argc, char **argv) {
             enc_ready = true;
             fprintf(stderr, "[pipe] %dx%d pipeline ready (yuyv→nv12 @15fps)\n", w, h);
         }
+
+        // NPU 检测喂帧(latest-wins 槽,非阻塞,不拖慢编码链)
+        g_yolo.submitFrame(buf, w, h, nowMs());
 
         // ① RGA:收到的 NV12(虚拟地址)→ VENC 输入 fd,硬件搬运
         // 注意 wrapbuffer_fd 宏参数序:(fd, w, h, format, wstride, hstride)

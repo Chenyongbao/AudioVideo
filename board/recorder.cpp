@@ -112,6 +112,7 @@ std::string Recorder::currentPath() const {
 // 事件标记:追加一行 "相对毫秒 epoch 文本" 到 <录像>.meta
 // (fflush 落盘,kill -9 后标记也不丢)
 bool Recorder::mark(const std::string &text) {
+    std::lock_guard<std::mutex> lk(m_);   // 检测线程调用,与控制线程 stop() 竞争需持锁
     if (!recording_ || path_.empty()) { err_ = "not recording"; return false; }
     char meta_path[192];
     snprintf(meta_path, sizeof(meta_path), "%s.meta", path_.c_str());
