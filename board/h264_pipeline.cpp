@@ -8,6 +8,7 @@
 // ============================================================================
 #include "mpp_h264_encoder.hpp"
 #include "recorder.hpp"
+#include "rtsp_server.hpp"
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -56,6 +57,7 @@ static uint64_t g_frames = 0, g_bytes = 0;
 
 // ---- 录像:预录环形缓冲 + fMP4 断电安全写盘 ----
 static Recorder g_rec;
+static RtspServer g_rtsp;   // 标准 RTSP 发布(8554/live),替代裸 TCP 9999 的对外段
 static uint64_t nowMs() {
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
@@ -167,6 +169,11 @@ static void *control_thread(void *) {
                 snprintf(full, sizeof(full), "/userdata/%s", nm);
                 snprintf(resp, sizeof(resp), unlink(full) == 0 ? "OK deleted %s" : "ERR unlink %s", nm);
             }
+        } else if (!strncmp(buf, "REC_MARK", 8)) {
+            // 事件标记:录制中打点(正文为命令剩余部分,可含空格说明文字)
+            const char *text = (n > 9) ? buf + 9 : "mark";
+            snprintf(resp, sizeof(resp), g_rec.mark(text) ? "OK mark" : "ERR %s",
+                     g_rec.lastError().c_str());
         } else if (!strncmp(buf, "REC_STAT", 8)) {
             snprintf(resp, sizeof(resp), "%s %llu ms", g_rec.recording() ? "REC" : "IDLE",
                      (unsigned long long)g_rec.recordedMs());
@@ -268,9 +275,13 @@ static void reap_dead() {
 }
 
 int main(int argc, char **argv) {
-    // 控制通道线程(UDP 7777:REC_START/STOP/STAT)
+    // 控制通道线程(UDP 7777:REC_START/STOP/MARK/STAT/FILE_*/TIME_SET)
     pthread_t ctl_tid;
     pthread_create(&ctl_tid, nullptr, control_thread, nullptr);
+
+    // RTSP 服务器(8554/live):标准协议对外发布 VENC 输出
+    if (!g_rtsp.start(8554, "live"))
+        fprintf(stderr, "[rtsp] start failed, 只保留裸 TCP 9999\n");
     int in_port = argc > 1 ? atoi(argv[1]) : 8888;
     int out_port = argc > 2 ? atoi(argv[2]) : 9999;
     // g_viewers[] 静态零初始化(nullptr=空位)
@@ -361,6 +372,7 @@ int main(int argc, char **argv) {
                                   }
                               }
                               g_bytes += plen;
+                              g_rtsp.push(p, plen);   // RTSP:标准协议对外(含 SPS/PPS 与视频 NAL,server 内拆分)
                               // SPS/PPS 头包(~38B)与首帧同 ts,喂进 recorder 会造成 DTS 重复,过滤
                               if (plen > 1000)
                                   g_rec.feed(p, plen, key, nowMs());   // 录像:实时包喂 recorder(录制中写盘/空闲入预录缓冲)

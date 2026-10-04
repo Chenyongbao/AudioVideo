@@ -32,6 +32,10 @@ public:
 
     bool recording() const;
     uint64_t recordedMs() const;          // 已录时长(含预录)
+    std::string currentPath() const;      // 当前录像文件路径(未录制为空)
+    // 事件标记:录制中把 "相对毫秒 epoch 文本" 追加到 <录像>.meta,
+    // 回放端按相对毫秒在时间轴上画 ▲ 并支持跳转
+    bool mark(const std::string &text);
     static constexpr int PRE_SECONDS = 30;
 
     const std::string &lastError() const { return err_; }
@@ -59,5 +63,6 @@ private:
     bool recording_ = false;
     uint64_t start_ts_ = 0;                  // 起录时刻(单调 ms)
     uint64_t last_ts_ = 0;
+    std::string path_;                       // 当前录像文件路径(mark 写 .meta 用)
     std::string err_;
 };

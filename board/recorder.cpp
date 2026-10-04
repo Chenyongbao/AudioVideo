@@ -80,6 +80,7 @@ bool Recorder::start(const std::string &path, int width, int height, int fps,
     }
     last_ts_ = start_ts_;
     recording_ = true;
+    path_ = path;
 
     drainPrebuffer();
     fprintf(stderr, "[rec] start %s (prebuffer %zu pkts, %zu KB)\n",
@@ -93,6 +94,7 @@ void Recorder::stop() {
     recording_ = false;
     if (header_written_ && fmt_) av_write_trailer(fmt_);
     closeFile();
+    path_.clear();
     fprintf(stderr, "[rec] stopped, duration %llu ms\n",
             (unsigned long long)(last_ts_ > start_ts_ ? last_ts_ - start_ts_ : 0));
 }
@@ -101,6 +103,26 @@ bool Recorder::recording() const { return recording_; }
 
 uint64_t Recorder::recordedMs() const {
     return recording_ ? (last_ts_ > start_ts_ ? last_ts_ - start_ts_ : 0) : 0;
+}
+
+std::string Recorder::currentPath() const {
+    return recording_ ? path_ : std::string();
+}
+
+// 事件标记:追加一行 "相对毫秒 epoch 文本" 到 <录像>.meta
+// (fflush 落盘,kill -9 后标记也不丢)
+bool Recorder::mark(const std::string &text) {
+    if (!recording_ || path_.empty()) { err_ = "not recording"; return false; }
+    char meta_path[192];
+    snprintf(meta_path, sizeof(meta_path), "%s.meta", path_.c_str());
+    FILE *f = fopen(meta_path, "a");
+    if (!f) { err_ = "open meta failed"; return false; }
+    uint64_t rel = last_ts_ > start_ts_ ? last_ts_ - start_ts_ : 0;
+    fprintf(f, "%llu %lld %s\n", (unsigned long long)rel,
+            (long long)time(nullptr), text.c_str());
+    fclose(f);
+    fprintf(stderr, "[rec] mark @%llu ms: %s\n", (unsigned long long)rel, text.c_str());
+    return true;
 }
 
 void Recorder::drainPrebuffer() {
