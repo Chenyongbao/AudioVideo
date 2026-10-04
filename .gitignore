@@ -5,3 +5,5 @@ wslcamera/mjpeg_nv12_sender
 board/h264_pipeline
 board/probe_vdec
 board/*.o
+board/test_*
+board/smoke_*
