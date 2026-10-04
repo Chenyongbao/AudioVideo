@@ -9,6 +9,7 @@
 #include "mpp_h264_encoder.hpp"
 #include "recorder.hpp"
 #include "rtsp_server.hpp"
+#include "hashchain.hpp"
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -116,8 +117,19 @@ static void *control_thread(void *) {
             snprintf(resp, sizeof(resp), ok ? "OK %s" : "ERR %s", ok ? path : g_rec.lastError().c_str());
         } else if (!strncmp(buf, "REC_STOP", 8)) {
             uint64_t d = g_rec.recordedMs();
+            std::string lastPath = g_rec.currentPath();
             g_rec.stop();
-            snprintf(resp, sizeof(resp), "OK stopped %llu ms", (unsigned long long)d);
+            // 证据链:录像停止即算 SHA-256 入链(任何后段篡改都会断链被发现)
+            bool chained = false;
+            if (!lastPath.empty()) chained = hashchain_append(lastPath);
+            snprintf(resp, sizeof(resp), "OK stopped %llu ms%s",
+                     (unsigned long long)d, chained ? " [chained]" : "");
+        } else if (!strncmp(buf, "HASH_VERIFY", 11)) {
+            // 证据链校验:逐段重算哈希 + 链式衔接检查,单包返回报告
+            static std::string report;   // static 缓冲避免悬空(单线程控制通道,安全)
+            report = hashchain_verify();
+            sendto(s, report.data(), report.size(), 0, (sockaddr *)&from, fl);
+            continue;
         } else if (!strncmp(buf, "TIME_SET", 8)) {
             // 客户端把自己的 epoch 秒发来校准板钟(板无 RTC,开机为 1970)
             // 之后录像文件名/MP4 creation_time 均为真实时间
