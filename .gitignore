@@ -16,3 +16,8 @@ board/smoke_*
 board/detect_test
 build/*
 !build/.gitkeep
+
+# Qt 客户端(AudioVideo)编译产物与用户配置
+AudioVideo/build*
+AudioVideo/CMakeLists.txt.user
+*.pro.user
