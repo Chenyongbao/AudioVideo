@@ -62,6 +62,9 @@ void OnvifServer::discoveryLoop() {
     if (fd < 0) return;
     int yes = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    // recvfrom 必须能被唤醒退出:500ms 超时后回查 running_,否则 stop() join 永久挂死
+    struct timeval tv{0, 500 * 1000};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(3702);

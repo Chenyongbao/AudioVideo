@@ -15,6 +15,11 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
+#include <csignal>
+
+// ---- 优雅退出:信号处理器只置位,清理在 main 收尾统一做 ----
+static volatile sig_atomic_t g_stop = 0;
+static void onSignal(int) { g_stop = 1; }
 #include <sys/statvfs.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -354,6 +359,16 @@ static void reap_dead() {
 }
 
 int main(int argc, char **argv) {
+    // 优雅退出:Ctrl-C(SIGINT)/kill(SIGTERM/SIGQUIT)→ 置停机标志,
+    // 阻塞调用靠不设 SA_RESTART 被打断,清理统一走 main 收尾
+    struct sigaction sa{};
+    sa.sa_handler = onSignal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;   // 不设 SA_RESTART:accept/recv 立即返回 EINTR,循环感知 g_stop
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+    sigaction(SIGQUIT, &sa, nullptr);
+
     // 控制通道线程(UDP 7777:REC_START/STOP/MARK/STAT/FILE_*/TIME_SET)
     pthread_t ctl_tid;
     pthread_create(&ctl_tid, nullptr, control_thread, nullptr);
@@ -401,9 +416,10 @@ int main(int argc, char **argv) {
     pfd.fd = lout;
     pfd.events = POLLIN;
 
-    while (true) {   // 会话循环:发送端断开不退出,等下一个接入(观看端保持连接)
+    while (!g_stop) {   // 会话循环:发送端断开不退出,等下一个接入(观看端保持连接);Ctrl-C 优雅退出
         fprintf(stderr, "waiting sender on %d...\n", in_port);
         int in_sock = accept(lin, nullptr, nullptr);
+        if (g_stop) break;                     // 信号打断 accept:直接退出
         if (in_sock < 0) { perror("accept sender"); usleep(500000); continue; }
         fprintf(stderr, "[sender] connected\n");
 
@@ -413,7 +429,7 @@ int main(int argc, char **argv) {
         int w = 0, h = 0;
         uint8_t hdr[4];
 
-        while (true) {
+        while (!g_stop) {
         if (recv_all(in_sock, hdr, 4) < 0) { fprintf(stderr, "[sender] closed\n"); break; }
         uint32_t len = hdr[0] | (hdr[1] << 8) | (hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
         if (len == 0 || len > sizeof(buf)) break;
@@ -497,8 +513,12 @@ int main(int argc, char **argv) {
                 (unsigned long)g_frames, g_bytes / 1024.0);
     }   // 会话循环:回到等下一个发送端(观看端保持连接)
 
-    // 以下在会话循环永不退出时不可达,保留以防未来增加退出条件
+    // 优雅退出收尾(正常走完或 Ctrl-C/kill 到此):资源全部释放,可立即重启
+    fprintf(stderr, "[exit] shutting down...\n");
+    if (g_rec.recording()) g_rec.stop();   // 录制中:封口 fMP4 + 入哈希链
     g_onvif.stop();   // 关 ONVIF(发现+SOAP)线程
+    g_rtsp.stop();    // 关 RTSP 服务器(live555 事件循环退出,释放 8554)
+    g_yolo.stop();    // 停 NPU 检测线程(join + rknn_destroy)
     {
         std::lock_guard<std::mutex> lk(g_vlock);
         for (int i = 0; i < MAX_VIEWERS; i++) {

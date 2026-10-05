@@ -37,6 +37,18 @@ bool isParamNal(const std::vector<uint8_t> &v) {
     return t == 7 || t == 8;
 }
 
+bool isIdrNal(const std::vector<uint8_t> &v) {
+    // IDR:类型 5;或 slice 类型 1/5 的分片首包(首 MB 模式下 nal 类型即 5)
+    if (v.empty()) return false;
+    uint8_t t = v[0] & 0x1F;
+    if (t == 5) return true;
+    if (t == 20) return true;   // (MVC 扩展,保守包含)
+    return false;
+}
+
+// 新客户端接入后置 true:push 丢弃非 IDR 帧直到关键帧(避免起播花屏)
+bool g_waitIdr = false;
+
 std::string b64(const uint8_t *p, size_t n) {
     static const char *T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string out;
@@ -114,8 +126,12 @@ public:
 
     FramedSource *createNewStreamSource(unsigned, unsigned &estBitrate) override {
         estBitrate = 4000;
-        // 新客户端接入:把缓存的参数集重灌队首,framer 立即拿到 SPS/PPS
+        // 新客户端接入:清空积压(最多 kQueueMax 个 NAL ≈ 30s+ 旧数据),
+        // 否则客户端从最旧帧起播、狂追实时 → 前 30s 快进。
+        // 清空后等下一个 IDR 关键帧起播,零积压零花屏;参数集缓存照常重灌。
         { std::lock_guard<std::mutex> lk(g_qlock);
+          g_nals.clear();
+          g_waitIdr = true;
           if (!g_sps.empty()) g_nals.push_front(g_sps);
           if (!g_pps.empty()) g_nals.push_front(g_pps); }
         H264LiveSource::g_src = H264LiveSource::createNew(envir());
@@ -123,6 +139,9 @@ public:
     }
 
     RTPSink *createNewRTPSink(Groupsock *gsock, unsigned char, FramedSource *) override {
+        // IDR 关键帧可达 ~100KB(实测日志提示 103014),默认 60000 会截断尾数据
+        // → 客户端解码报错。必须在创建 RTPSink 之前调大。
+        OutPacketBuffer::maxSize = 300000;
         return H264VideoRTPSink::createNew(envir(), gsock, 96);
     }
 
@@ -180,6 +199,11 @@ void RtspServer::push(const uint8_t *data, uint32_t len) {
             if (e <= s) return;
             std::vector<uint8_t> nal(data + s, data + e);
             uint8_t t = nal[0] & 0x1F;
+            // 等关键帧门控:新客户端接入后丢弃 P 帧直到 IDR(起播零花屏)
+            if (g_waitIdr && !isParamNal(nal)) {
+                if (!isIdrNal(nal)) return;
+                g_waitIdr = false;      // 首个 IDR 放行,恢复正常馈送
+            }
             if (t == 7) g_sps = nal;
             else if (t == 8) g_pps = nal;
             g_nals.push_back(std::move(nal));
