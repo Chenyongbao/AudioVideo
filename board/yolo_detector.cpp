@@ -105,6 +105,13 @@ void YoloDetector::loop() {
     std::vector<uint8_t> rgb((size_t)mw * mh * 3);
     std::vector<uint8_t> frame;          // 取走的工作副本
 
+    // 吞吐统计(每 100 帧打印):实测检测 fps / 平均推理 ms / 有框帧占比
+    uint64_t statN = 0, statHit = 0;
+    double statInfMs = 0;
+    auto statT0 = std::chrono::steady_clock::now();
+    auto statT = statT0;
+    char perfBuf[160];
+
     while (running_.load()) {
         // ---- 取帧(若无帧等 200ms,节拍兜底 5fps) ----
         {
@@ -121,16 +128,19 @@ void YoloDetector::loop() {
         // ---- 预处理:NV12 → RGB 拉伸 ----
         nv12ToRgbStretch(frame.data(), sw, sh, rgb.data(), mw, mh);
 
-        // ---- 推理 ----
+        // ---- 推理(计时) ----
         rknn_input inputs[1]; memset(inputs, 0, sizeof(inputs));
         inputs[0].index = 0; inputs[0].type = RKNN_TENSOR_UINT8;
         inputs[0].size = (uint32_t)mw * mh * 3; inputs[0].fmt = RKNN_TENSOR_NHWC;
         inputs[0].pass_through = 0; inputs[0].buf = rgb.data();
         rknn_inputs_set(ctx, 1, inputs);
+        auto infT0 = std::chrono::steady_clock::now();
         if (rknn_run(ctx, nullptr) < 0) continue;
         rknn_output outputs[16]; memset(outputs, 0, sizeof(outputs));
         for (uint32_t i = 0; i < ionum.n_output; i++) outputs[i].want_float = 0;
         if (rknn_outputs_get(ctx, ionum.n_output, outputs, nullptr) < 0) continue;
+        statInfMs += std::chrono::duration<double, std::milli>(
+                         std::chrono::steady_clock::now() - infT0).count();
 
         // ---- 后处理(框映射回源帧坐标) ----
         detect_result_group_t grp;
@@ -150,6 +160,23 @@ void YoloDetector::loop() {
             boxes.push_back(b);
         }
         if (cb_) cb_(boxes, ts);
+
+        // ---- 统计窗口(100 帧打印一次) ----
+        statN++;
+        if (!boxes.empty()) statHit++;
+        if (statN % 100 == 0) {
+            auto now = std::chrono::steady_clock::now();
+            double wallS = std::chrono::duration<double>(now - statT).count();
+            double totalS = std::chrono::duration<double>(now - statT0).count();
+            snprintf(perfBuf, sizeof(perfBuf),
+                     "[yolo] stat: %.1f det/s | avg inf %.1f ms | hit %llu/%llu (%.0f%%) | uptime %.0fs\n",
+                     100.0 / (wallS > 0 ? wallS : 1),
+                     statInfMs / statN,
+                     (unsigned long long)statHit, (unsigned long long)statN,
+                     100.0 * statHit / statN, totalS);
+            fputs(perfBuf, stderr);
+            statT = now; statHit = 0;
+        }
     }
 
     rknn_destroy(ctx);
