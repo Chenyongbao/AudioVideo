@@ -11,6 +11,7 @@
 #include "rtsp_server.hpp"
 #include "hashchain.hpp"
 #include "yolo_detector.hpp"
+#include "onvif.hpp"
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -63,6 +64,8 @@ static RtspServer g_rtsp;   // 标准 RTSP 发布(8554/live),替代裸 TCP 9999 
 
 // ---- NPU 人/车检测(5fps 抽帧,不阻塞编码链)----
 static YoloDetector g_yolo;
+// ---- ONVIF Profile S(WS-Discovery 3702 + SOAP 8899,对外扮标准 IPC)----
+static OnvifServer g_onvif;
 static std::mutex g_detLock;                 // 保护 g_lastDets(7778 推送线程读)
 static std::vector<DetBox> g_lastDets;       // 最新一帧检测结果(源帧坐标)
 static uint64_t g_lastDetTs = 0;
@@ -364,6 +367,9 @@ int main(int argc, char **argv) {
         g_yolo.start(onDetections);
     else
         fprintf(stderr, "[yolo] disabled (model missing)\n");
+
+    // ONVIF:对外扮标准 IPC(NVR/ODM 自动发现 → 拿 GetStreamUri → 拉 RTSP)
+    g_onvif.start(8899, "rtsp://192.168.137.250:8554/live");
     int in_port = argc > 1 ? atoi(argv[1]) : 8888;
     int out_port = argc > 2 ? atoi(argv[2]) : 9999;
     // g_viewers[] 静态零初始化(nullptr=空位)
@@ -492,6 +498,7 @@ int main(int argc, char **argv) {
     }   // 会话循环:回到等下一个发送端(观看端保持连接)
 
     // 以下在会话循环永不退出时不可达,保留以防未来增加退出条件
+    g_onvif.stop();   // 关 ONVIF(发现+SOAP)线程
     {
         std::lock_guard<std::mutex> lk(g_vlock);
         for (int i = 0; i < MAX_VIEWERS; i++) {
