@@ -1,78 +1,72 @@
-# body-worn-camera — 对标 GA/T 947.2 的执法记录仪音视频子系统
+# body-worn-camera — RV1126 智能执法记录仪
 
-RV1126 平台执法记录仪音视频子系统的开发/验证项目。当前阶段在 WSL2 Ubuntu 下用
-笔记本 USB 摄像头跑通全链路（采集 → H.264 编码 → fragmented MP4 分段 → SHA-256
-manifest），核心中间件平台无关，之后逐模块移植到 RV1126（RKMPI/MPP）。
+RV1126 平台执法记录仪:笔记本摄像头 → WSL(软解 NV12)→ 板端(RGA+MPP 硬编+NPU 检测)
+→ RTSP/ONVIF 对外发布,配套完整录像可靠性链(预录/断电安全/打点/哈希链)与 Qt 管理客户端。
+
+## 架构与数据流
+
+```
+摄像头(WSL) ──MJPEG──> ffmpeg 软解 NV12 ──TCP 8888──> 板端 RV1126
+                                                        ├─ RGA 硬件搬运 → VENC 硬编 H.264 (15fps)
+                                                        ├─ NPU YOLOv5s 5fps 人/车检测(独立线程)
+                                                        │    └─ 超阈值自动打点(10s 冷却)
+                                                        ├─ 录像: 30s 预录 + fMP4 断电安全 + 空间保护
+                                                        ├─ 证据链: SHA-256 链式哈希(防删/插/换段)
+                                                        ├─ RTSP 8554/live (live555) ──┐
+                                                        ├─ ONVIF 8899+3702 (发现+SOAP) ├→ 客户端
+                                                        └─ 控制 UDP 7777 (命令通道) ──┘
+```
 
 ## 目录结构
 
 ```
-platform/    平台抽象层：IVideoSource(V4L2) / IAudioSource(ALSA) / 统一毫秒时钟
-             移植时新增 video_rkmpi.cpp(=RKMPI VI) 、audio_rkmpi.cpp(=AI/G711A)
-encoder/     H.264 编码封装（PC: libx264；板端: MPP VENC，接口 IVideoEncoder 不变）
-muxer/       fragmented MP4 分段写文件器（掉电安全：每 fragment 自包含）
-middleware/  核心中间件（平台无关，直接移植）：
-             EncodedFrameRing   GOP 对齐的编码帧环形预录缓冲（30s 仅 ~15MB）
-             SegmentManager     分段录像管理（帧边界原子切换，间隙 <1 帧）
-             Recorder           录制状态机 IDLE/RECORDING（预录回填入口）
-             integrity          每段落盘后 SHA-256 → manifest.sha256
-main.cpp     bwc_demo 演示程序
+board/       板端源码(h264_pipeline 主程序 + 检测/录像/RTSP/ONVIF/哈希链模块)
+             build.sh 一键交叉编译,产物统一输出 build/
+wslcamera/   WSL 推流端(mjpeg_nv12_sender: MJPEG 采集→软解 NV12→8888)
+test/        video_push.py 视频文件推流器(YOLO 性能回归测试,realtime/full 双模式)
+build/       编译产物(不入库;build.sh 生成)
+docs/        设计文档
+recordings/  本地录像测试产物(不入库)
 ```
 
-## 构建（WSL Ubuntu）
+## 板端模块一览(board/)
+
+| 模块 | 职责 |
+|---|---|
+| h264_pipeline.cpp | 主程序:收流→RGA→VENC→广播,全部 UDP 命令,优雅退出(信号捕获) |
+| yolo_detector / yolo_postprocess | NPU 检测线程(latest-wins 帧槽,5fps)+ 后处理(anchors/NMS) |
+| recorder.{hpp,cpp} | fMP4 录像 + 30s 预录环形缓冲 + 事件打点(.meta) |
+| hashchain.{hpp,cpp} | SHA-256 链式哈希(HASH_VERIFY 逐段校验) |
+| rtsp_server.{hpp,cpp} | live555 RTSP 发布(新客户端清积压+等 IDR 起播) |
+| onvif.{hpp,cpp} | ONVIF Profile S 设备端(WS-Discovery 3702 + SOAP 8899,零依赖手写) |
+| mpp_h264_encoder / mpp_jpeg_decoder | MPP 硬编/硬解封装 |
+
+## 构建 / 部署 / 运行
 
 ```bash
-cmake -B build -S . && cmake --build build -j$(nproc)
+# 板端(WSL 交叉编译)
+board/build.sh                                    # → build/h264_pipeline
+adb push build/h264_pipeline /tmp/
+adb shell "cp /tmp/h264_pipeline /oem/usr/bin/ && /etc/init.d/S50h264_pipeline restart"
+
+# 运行顺序:① 板端(start) ② 推流端 ③ Qt 客户端连接
+adb shell "/etc/init.d/S50h264_pipeline start|stop|status"   # 或前台直跑日志直出
+wslcamera/mjpeg_nv12_sender                                  # Ctrl-C 优雅退出
+
+# Qt 客户端(Windows,前后端分离)
+# C:\Users\Mr.chen\Desktop\QtProgrmas\AudioVideo
+# core/(DeviceClient:UDP 命令+检测统计) / video/(流媒体线程) / mainwindow(纯视图)
 ```
 
-依赖：`libavcodec/libavformat/libavutil/libswscale-dev`、`libasound2-dev`、
-`libssl-dev`、`pkg-config`（本机均已具备）。
+## 主要验证结论
 
-## USB 摄像头透传（Windows → WSL2）
+- 端到端色度无损(testsrc2 彩条 112/119≈源);延迟粗测 ~177ms
+- NPU 检测吞吐 9.9 det/s @ 推理 62ms,进程 CPU 2.5%,不挤垮 15fps 编码链
+- fMP4 kill -9 后可播;填盘实测 <20MB 自动停录;篡改 1 字节 → 哈希链 TAMPERED
+- RTSP 新客户端零积压起播(清队列+等 IDR);IDR ~103KB 需 OutPacketBuffer 300KB
+- 单播 ProbeMatch + SOAP 四动作全过(组播受 ICS 网段限制,环境问题)
 
-WSL2 默认看不到 USB 设备，需在 **Windows PowerShell(管理员)** 执行：
+## 历史说明
 
-```powershell
-winget install usbipd
-usbipd list                          # 找到摄像头的 BUSID
-usbipd bind --busid <BUSID>
-usbipd attach --wsl --busid <BUSID>
-```
-
-回到 WSL 验证：`ls /dev/video*` → 出现 `/dev/video0` 后运行：
-
-```bash
-./build/bwc_demo ./recordings
-# 回车 = 触发录像（状态机 IDLE→RECORDING，含预录回填入口）
-# q+回车 = 停止
-```
-
-输出：`recordings/seg_<ts>.mp4`（10s 一段，fragmented MP4，随时拔电已落盘部分可播）
-+ `manifest.sha256`（每段 SHA-256 清单）。可用 `ffprobe` 检查分段连续性。
-
-## 运行验证点（对应标准指标，含实测数据）
-
-| 验证 | 方法 | 实测结果 |
-|---|---|---|
-| 分段无缝 ≤0.04s | 逐段检查相邻分段切换间隔 | 1 分钟 7 段，相邻段间隔 10005~10028ms（10s 配置，最大偏差 28ms < 40ms） |
-| 掉电安全 | SIGKILL（无收尾机会）+ ffprobe/ffmpeg 校验 | kill -9 后文件 8.03s/241 帧完整解码零错误（关键帧边界 flush，磁盘只有完整 fragment） |
-| 预录回放 | IDLE 10s 后触发，检查首段时长 | 触发后首段 9.6s/288 帧 = 触发前画面（IDLE 期无落盘，音频随视频一起回填） |
-| 码控 CBR | ffprobe 逐段 bit_rate | 7 段实测 3.991~4.012 Mbps（目标 4Mbps，偏差 ±0.3%；x264 nal-hrd=cbr） |
-| 音视频同步 | 合成事件法：白帧@5.0s + beep@5.0s，ffmpeg 回测 | 白帧实测 5.000s，beep 实测 5.02s，失步 20ms < 100ms（标准 ≤1s） |
-| 真实拍手测试 | 真人拍手×3（画面内），音频 RMS 尖峰 × 视频 YDIF 尖峰配对 | 6 对事件配对，失步中位 67ms（含 WSLg 音频代理传输延迟，管线固有失步更小）|
-| 哈希链防篡改 | 篡改/删除分段后 chain_verify | 篡改 seg_2 后校验即失败（链哈希 = SHA256(前段链‖本段)，无法局部重算） |
-| 满盘循环覆盖 | 小配额 + 重点标记 | 超限删最旧段，MARK 标记文件被保护跳过，manifest 同步重写 |
-| OSD 烧帧 | 抽帧检查 | 时间戳 + 设备编号烧进码流（编码前叠加不可分离） |
-
-注意事项：
-- 音频链路已实跑验证（WSLg PulseAudio 代理 → ALSA → AAC → 双流 fMP4）：真实麦克风采集、双流分段、音频预录回填、拍手同步实测均通过；板端换 G.711A 需复测。
-- 延录已实现（`STOPPING_PENDING`，默认 25min 可配，demo 5s），实测延录期持续写盘、到点自动收尾。
-
-## RV1126 移植路径
-
-1. `platform/video_v4l2.cpp` → `video_rkmpi.cpp`：RKMPI VI→VENC 双通道
-   （主码流录像 + 子码流预览），VI 直接出 NV12，无需软件转换。
-2. `encoder/h264_encoder.cpp` → MPP VENC（CBR + GOP/ROI 码控，对标 1080p25≈5.8Mbps）。
-3. `platform/audio_alsa.cpp` → RKMPI AI（G.711A）；音频为主时钟，视频 PTS 向音频对齐。
-4. OSD：RGA/VE 通道叠加时间戳/编号，编码前烧帧（不可分离）。
-5. 板端交叉编译不进本项目主构建，小代码示例用 SDK 工具链单独编译后 adb 推送验证。
+第一代 PC 验证原型(libx264 软编 + middleware 平台无关层)已完成使命并清理,
+其核心设计(环形预录/fMP4 分段/SHA-256)由 board/ 模块重写升级;git 历史可回溯。

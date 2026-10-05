@@ -1,10 +1,18 @@
+# 录像与抓帧产物
 *.mp4
+*.jpg
+
+# WSL 推流端编译产物
 wslcamera/mjpeg_sender
 wslcamera/yuyv_sender
 wslcamera/mjpeg_nv12_sender
+
+# 编译产物:一律不入库(board/build.sh 统一输出到 build/)
+board/*.o
 board/h264_pipeline
 board/probe_vdec
-board/*.o
 board/test_*
 board/smoke_*
 board/detect_test
+build/*
+!build/.gitkeep
